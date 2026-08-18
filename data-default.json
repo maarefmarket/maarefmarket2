@@ -1,0 +1,155 @@
+{
+  "settings": {
+    "storeName": "CampusKart",
+    "description": "متجر الجامعة — كل ما تحتاجه في مكان واحد",
+    "email": "",
+    "whatsapp": "905000000000",
+    "instagram": "",
+    "deliveryNote": "توصيل داخل الحرم الجامعي · الدفع عند الاستلام",
+    "bannerIntervalSec": 7
+  },
+  "banners": [
+    {
+      "image": "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?auto=format&fit=crop&w=1200&q=70",
+      "eyebrow": "CampusKart",
+      "title": "كل ما تحتاجه في مكان واحد",
+      "link": ""
+    },
+    {
+      "image": "https://images.unsplash.com/photo-1553531384-cc64ac80f931?auto=format&fit=crop&w=1200&q=70",
+      "eyebrow": "عروض الطلاب",
+      "title": "شيبس ومشروبات بأسعار مميّزة",
+      "link": ""
+    }
+  ],
+  "categories": [
+    { "slug": "chips",    "name": "شيبسات" },
+    { "slug": "drinks",   "name": "مشروبات" },
+    { "slug": "biscuits", "name": "بسكوت" },
+    { "slug": "canned",   "name": "معلبات" },
+    { "slug": "icecream", "name": "مثلجات" },
+    { "slug": "salty",    "name": "موالح" },
+    { "slug": "school",   "name": "أدوات مدرسية" }
+  ],
+  "products": [
+    {
+      "id": 1, "name": "شيبس ليز بالجبنة", "category": "chips",
+      "prices": { "SYP": 7000, "USD": 0.50, "TRY": 16.5 },
+      "availability": "in", "created": 1755000000000, "views": 0,
+      "description": "شيبس مقرمش بنكهة الجبنة الغنية.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1613919113640-25732ec5e61f?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 2, "name": "شيبس دوريتوس", "category": "chips",
+      "prices": { "SYP": 10500, "USD": 0.75, "TRY": 24.75 },
+      "availability": "in", "created": 1755000100000, "views": 0,
+      "description": "دوريتوس بالنكهة الحارّة.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1600952841320-db92ec4047ca?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 3, "name": "شيبس برنجلز", "category": "chips",
+      "prices": { "SYP": 21000, "USD": 1.50, "TRY": 49.5 },
+      "availability": "limited", "created": 1755000200000, "views": 0,
+      "description": "علبة برنجلز الأصلية 165غ.", "notes": "الكمية محدودة",
+      "images": ["https://images.unsplash.com/photo-1621939514649-280e2ee25f60?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 4, "name": "بيبسي 330 مل", "category": "drinks",
+      "prices": { "SYP": 8400, "USD": 0.60, "TRY": 19.8 },
+      "availability": "in", "created": 1755000300000, "views": 0,
+      "description": "علبة بيبسي منعشة.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1629203851122-3726ecdf080e?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 5, "name": "كوكاكولا 330 مل", "category": "drinks",
+      "prices": { "SYP": 8400, "USD": 0.60, "TRY": 19.8 },
+      "availability": "in", "created": 1755000400000, "views": 0,
+      "description": "كوكاكولا الأصلية.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1554866585-cd94860890b7?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 6, "name": "ماء 500 مل", "category": "drinks",
+      "prices": { "SYP": 3500, "USD": 0.25, "TRY": 8.25 },
+      "availability": "out", "created": 1755000500000, "views": 0,
+      "description": "قنينة ماء نقي.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 7, "name": "بسكوت أوريو", "category": "biscuits",
+      "prices": { "SYP": 11200, "USD": 0.80, "TRY": 26.4 },
+      "availability": "in", "created": 1755000600000, "views": 0,
+      "description": "بسكوت أوريو الشهير بحشوة الكريمة.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1590080875515-8a3a8dc5735e?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 8, "name": "بسكوت غاندور بالشوكولا", "category": "biscuits",
+      "prices": { "SYP": 5600, "USD": 0.40, "TRY": 13.2 },
+      "availability": "in", "created": 1755000700000, "views": 0,
+      "description": "بسكوت غاندور بالشوكولا.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1558961363-fa8fdf82db35?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 9, "name": "تونة علبة", "category": "canned",
+      "prices": { "SYP": 25200, "USD": 1.80, "TRY": 59.4 },
+      "availability": "in", "created": 1755000800000, "views": 0,
+      "description": "علبة تونة بالزيت النباتي 160غ.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1626683964220-c1c88faed70e?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 10, "name": "فول مدمس", "category": "canned",
+      "prices": { "SYP": 16800, "USD": 1.20, "TRY": 39.6 },
+      "availability": "in", "created": 1755000900000, "views": 0,
+      "description": "فول مدمس جاهز للأكل.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1607532941433-304659e8198a?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 11, "name": "آيس كريم كورنيتو", "category": "icecream",
+      "prices": { "SYP": 14000, "USD": 1.00, "TRY": 33.0 },
+      "availability": "limited", "created": 1755001000000, "views": 0,
+      "description": "كورنيتو بالفانيلا والشوكولا.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1497034825429-c343d7c6a68f?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 12, "name": "آيس كريم ماغنوم", "category": "icecream",
+      "prices": { "SYP": 28000, "USD": 2.00, "TRY": 66.0 },
+      "availability": "in", "created": 1755001100000, "views": 0,
+      "description": "ماغنوم بالشوكولا الفاخرة.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 13, "name": "فستق حلبي محمّص", "category": "salty",
+      "prices": { "SYP": 49000, "USD": 3.50, "TRY": 115.5 },
+      "availability": "in", "created": 1755001200000, "views": 0,
+      "description": "فستق حلبي محمّص 100غ.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1502743780242-f10d2ba5cb54?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 14, "name": "بذر عبّاد الشمس", "category": "salty",
+      "prices": { "SYP": 14000, "USD": 1.00, "TRY": 33.0 },
+      "availability": "in", "created": 1755001300000, "views": 0,
+      "description": "بذر عبّاد الشمس مملّح.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1567892737950-30c4db37cd42?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 15, "name": "دفتر A5 مسطر", "category": "school",
+      "prices": { "SYP": 21000, "USD": 1.50, "TRY": 49.5 },
+      "availability": "in", "created": 1755001400000, "views": 0,
+      "description": "دفتر 100 ورقة مسطر بجودة عالية.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1531346878377-a5be20888e57?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 16, "name": "قلم جاف أزرق", "category": "school",
+      "prices": { "SYP": 4200, "USD": 0.30, "TRY": 9.9 },
+      "availability": "in", "created": 1755001500000, "views": 0,
+      "description": "قلم جاف أزرق سلس الكتابة.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1583485088034-697b5bc54ccd?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 17, "name": "طقم أقلام تلوين خشبية", "category": "school",
+      "prices": { "SYP": 35000, "USD": 2.50, "TRY": 82.5 },
+      "availability": "in", "created": 1755001600000, "views": 0,
+      "description": "12 قلم تلوين خشبي بألوان زاهية.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=70"]
+    }
+  ]
+}
