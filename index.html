@@ -108,6 +108,9 @@ header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 9
 .price .sub{font-size:11px;color:var(--muted);width:100%}
 .card .add{margin-top:6px}
 .card .add button{width:100%;font-size:12.5px;padding:8px}
+.card-actions{display:flex;gap:5px}
+.card-actions .btn-outline{flex:0 0 42px;padding:8px 0;font-size:16px}
+.card-actions .btn-wa{flex:1;padding:8px;font-size:12.5px;display:flex;align-items:center;justify-content:center;gap:4px}
 
 .crumb{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:13.5px;margin:14px 0;flex-wrap:wrap}
 .crumb a{cursor:pointer} .crumb a:hover{color:var(--gold)}
@@ -195,6 +198,8 @@ footer{margin-top:40px;border-top:1px solid var(--line);background:var(--surface
   .card .name{font-size:13px;min-height:34px}
   .card .desc{font-size:11px;min-height:28px}
   .card .add button{font-size:12px;padding:7px}
+  .card-actions .btn-outline{flex:0 0 36px;padding:6px 0;font-size:14px}
+  .card-actions .btn-wa{padding:7px;font-size:11.5px}
   .price b{font-size:14px}
 }
 </style>
@@ -285,6 +290,24 @@ function addToCart(id, qty){
   cart[id]=(cart[id]||0)+qty;
   saveCart(); toast("أُضيف إلى السلة");
 }
+function buyNowWA(id){
+  const p=byId(id);
+  if(!p||p.availability==="out"){ toast("المنتج غير متوفر","err"); return; }
+  if(!SETTINGS.whatsapp){ toast("لم يتم ضبط رقم واتساب","err"); return; }
+  const lines=[];
+  lines.push("السلام عليكم");
+  lines.push("أريد شراء هذا المنتج:");
+  lines.push("");
+  lines.push(`• *${p.name}* × 1`);
+  lines.push("");
+  lines.push("السعر:");
+  if(p.prices.TRY>0) lines.push(`• التركي: *${money(p.prices.TRY,"TRY")}*`);
+  if(p.prices.SYP>0) lines.push(`• السوري: *${money(p.prices.SYP,"SYP")}*`);
+  if(p.prices.USD>0) lines.push(`• الدولار: *${money(p.prices.USD,"USD")}*`);
+  lines.push("");
+  lines.push("شكراً لكم 🌿");
+  window.open("https://wa.me/"+SETTINGS.whatsapp+"?text="+encodeURIComponent(lines.join("\n").trim()),"_blank");
+}
 function setQty(id, qty){ if(qty<=0) delete cart[id]; else cart[id]=qty; saveCart(); }
 function cartTotals(){
   const t={SYP:0,USD:0,TRY:0};
@@ -335,6 +358,7 @@ let bannerIdx=0, bannerTimer=null;
 function bannerDelayMs(){ return Math.max(2, parseInt(SETTINGS.bannerIntervalSec,10) || 7) * 1000; }
 function stopBanner(){ if(bannerTimer){ clearInterval(bannerTimer); bannerTimer=null; } }
 function bannerHTML(){
+  if(SETTINGS.bannersEnabled === false) return "";
   if(!BANNERS.length){
     return `<div class="banner-area"><div class="banner empty"><div class="txt">
       <div class="ey">${SETTINGS.storeName||""}</div>
@@ -354,20 +378,11 @@ function renderBanner(){
 }
 function startBanner(){
   stopBanner();
+  if(SETTINGS.bannersEnabled === false) return;
   if(BANNERS.length>1){ bannerTimer=setInterval(()=>{ bannerIdx=(bannerIdx+1)%BANNERS.length; renderBanner(); }, bannerDelayMs()); }
 }
 
-function featuresHTML(){
-  return `<section class="features">
-    <h2 class="section-title" style="margin-bottom:14px">لماذا CampusKart؟</h2>
-    <div class="features-grid">
-      <div class="feat"><div class="fic">🌿</div><div class="ftxt">منتجات مختارة بعناية</div></div>
-      <div class="feat"><div class="fic">✨</div><div class="ftxt">جودة عالية وسعر مناسب</div></div>
-      <div class="feat"><div class="fic">🚚</div><div class="ftxt">توصيل داخل الحرم الجامعي</div></div>
-      <div class="feat"><div class="fic">💬</div><div class="ftxt">خدمة عملاء سريعة</div></div>
-    </div>
-  </section>`;
-}
+function featuresHTML(){ return ""; }
 
 function getList(mode, slug){
   let list=PRODUCTS.slice();
@@ -405,7 +420,10 @@ function cardHTML(p){
         <span class="sub">${priceTRY} · ${priceSYP}</span></div>
       <div class="add">${p.availability==="out"
         ?'<button class="btn btn-ghost" disabled>غير متوفر</button>'
-        :`<button class="btn btn-outline" onclick="addToCart(${p.id},1)">+ أضف للسلة</button>`}</div>
+        :`<div class="card-actions">
+            <button class="btn btn-outline" onclick="addToCart(${p.id},1)" title="أضف للسلة">🛒</button>
+            <button class="btn btn-wa" onclick="buyNowWA(${p.id})" title="اطلب عبر واتساب">📲 اطلب</button>
+          </div>`}</div>
     </div></article>`;
 }
 
@@ -434,7 +452,7 @@ function renderListing(mode, slug){
           :`<div class="empty">لا توجد منتجات هنا حالياً.</div>`}
       </div>
     </div>
-    ${mode===""&&!state.q?featuresHTML():""}`;
+    `;
   const sel=document.getElementById("sortSel");
   if(sel){ sel.value=state.sort; sel.onchange=e=>{state.sort=e.target.value; route();}; }
   const si=document.getElementById("searchInput");
