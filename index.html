@@ -288,24 +288,30 @@ const byId = id => PRODUCTS.find(p=>p.id===id);
 const state = {q:"", sort:"newest"};
 
 let cart = {};
+// السلة تستخدم sessionStorage → تُمسح تلقائياً عند إغلاق التبويب أو تحديث الصفحة
+// ملاحظة: sessionStorage يُمسح عند close التبويب، ويبقى فقط خلال تنقل المستخدم داخل الموقع
 function reloadCartFromStorage(){
-  try{ cart = JSON.parse(localStorage.getItem("ck_cart")||"{}") || {}; }catch(e){ cart={}; }
+  try{ cart = JSON.parse(sessionStorage.getItem("ck_cart")||"{}") || {}; }catch(e){ cart={}; }
   if(typeof cart !== "object" || cart === null) cart = {};
 }
+// مسح أي بقايا قديمة من localStorage (من الإصدار السابق)
+try{ localStorage.removeItem("ck_cart"); }catch(e){}
+// مسح السلة عند تحديث الصفحة (يُفرق بين التنقل والتحديث بواسطة sessionStorage flag)
+try{
+  const nav = performance.getEntriesByType("navigation")[0];
+  if(nav && nav.type === "reload"){
+    sessionStorage.removeItem("ck_cart");
+  }
+}catch(e){}
 reloadCartFromStorage();
 function pruneCart(){
-  // حذف أي منتج من السلة لم يعد موجوداً في قاعدة البيانات أو أصبح غير متوفر
-  let changed = false;
-  Object.keys(cart).forEach(id=>{
-    const p = byId(+id);
-    if(!p || p.availability === "out"){
-      delete cart[id];
-      changed = true;
-    }
-  });
-  if(changed) localStorage.setItem("ck_cart", JSON.stringify(cart));
+  // لا نمسح السلة أبداً إحتياطيّاً:
+  // - إن لم تُحمّل المنتجات بعد (فشل شبكة / تحديث الصفحة) → لا نمسح أي شيء
+  // - السلة تبقى محفوظة في localStorage مدي الحياة حتى يمسحها المستخدم يدوياً
+  // - المنتج المحذوف الفعليّ يظهر في السلة مع تنبيه وزر حذف
+  return;
 }
-function saveCart(){ localStorage.setItem("ck_cart", JSON.stringify(cart)); updateCartCount(); }
+function saveCart(){ sessionStorage.setItem("ck_cart", JSON.stringify(cart)); updateCartCount(); }
 function cartQty(){ return Object.values(cart).reduce((a,b)=>a+b,0); }
 function addToCart(id, qty){
   qty=qty||1; const p=byId(id);
@@ -367,20 +373,12 @@ function navTo(path){
   else go(path);
 }
 window.addEventListener("hashchange", route);
-// مزامنة السلة بين تبويبات المتصفح
-window.addEventListener("storage", e=>{
-  if(e.key === "ck_cart"){
-    reloadCartFromStorage();
-    updateCartCount();
-    if(location.hash.replace(/^#/,"") === "cart") renderCart();
-  }
-});
-// إعادة تحميل البيانات والسلة عند الرجوع للصفحة (من pageshow أيضاً لتجنّب bfcache)
+// عند الرجوع من bfcache (زر الرجوع) → أيضاً نمسح السلة
 window.addEventListener("pageshow", async (e)=>{
   if(e.persisted){
+    sessionStorage.removeItem("ck_cart");
+    cart = {};
     await loadData();
-    reloadCartFromStorage();
-    pruneCart();
     updateCartCount();
     route();
   }
@@ -576,8 +574,7 @@ function addFromPage(id){ addToCart(id,pQ); pQ=1; }
 function curProductId(){ const m=location.hash.match(/product\/(\d+)/); return m?+m[1]:null; }
 
 function renderCart(){
-  Object.keys(cart).forEach(id=>{ if(!byId(+id)) delete cart[id]; });
-  saveCart();
+  // لا نحذف أي منتج من السلة تلقائياً — السلة محميّة
   const ids=Object.keys(cart);
   if(!ids.length){
     document.getElementById("app").innerHTML=`<div class="empty">
@@ -587,7 +584,21 @@ function renderCart(){
     return;
   }
   const t=cartTotals();
-  const rows=ids.map(id=>{ const p=byId(+id); const q=cart[id];
+  const rows=ids.map(id=>{ 
+    const p=byId(+id); const q=cart[id];
+    // إذا لم يُحمّل المنتج بعد (مثلاً فشل اتّصال مؤقت) → أظهر مكاناً محجوزاً للمنتج دون حذفه من السلة
+    if(!p){
+      return `<div class="cart-item">
+        <div style="width:68px;height:68px;background:var(--elevated);border-radius:10px;display:grid;place-items:center;font-size:22px">⏳</div>
+        <div class="ci-body">
+          <div class="ci-name">منتج #${id}</div>
+          <div class="ci-price" style="color:var(--muted);font-size:12px">لم يُحمّل بعد… حدّث الصفحة</div>
+          <div class="qty" style="margin-top:5px"><button disabled>−</button><span>${q}</span><button disabled>+</button></div>
+        </div>
+        <div style="text-align:end">
+          <button class="link-remove" onclick="cartRemove(${id})">حذف</button>
+        </div></div>`;
+    }
     const img = (p.images&&p.images[0])||"";
     return `<div class="cart-item">
       ${img?`<img src="${img}" alt="${p.name}" onclick="go('product/${p.id}')" style="cursor:pointer">`:'<div style="width:68px;height:68px;background:var(--elevated);border-radius:10px"></div>'}
@@ -714,7 +725,6 @@ document.getElementById("searchInput").addEventListener("input",e=>{
   const ok = await loadData();
   if(!ok) return;
   reloadCartFromStorage();
-  pruneCart();
   renderFooter();
   updateCartCount();
   route();
