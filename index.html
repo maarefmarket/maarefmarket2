@@ -111,6 +111,11 @@ header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 9
 .card-actions{display:flex;gap:5px}
 .card-actions .btn-outline{flex:0 0 42px;padding:8px 0;font-size:16px}
 .card-actions .btn-wa{flex:1;padding:8px;font-size:12.5px;display:flex;align-items:center;justify-content:center;gap:4px}
+.qty-inline{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:6px;background:var(--elevated);border-radius:999px;padding:3px}
+.qty-inline .qbtn{width:30px;height:30px;border-radius:999px;border:none;background:var(--surface);color:var(--forest);font-weight:700;font-size:16px;cursor:pointer;display:grid;place-items:center;transition:.15s}
+.qty-inline .qbtn:hover:not(:disabled){background:var(--gold);color:#fff}
+.qty-inline .qbtn:disabled{opacity:.35;cursor:not-allowed}
+.qty-inline .qval{font-weight:800;font-size:14px;color:var(--forest);min-width:24px;text-align:center}
 
 .crumb{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:13.5px;margin:14px 0;flex-wrap:wrap}
 .crumb a{cursor:pointer} .crumb a:hover{color:var(--gold)}
@@ -200,6 +205,8 @@ footer{margin-top:40px;border-top:1px solid var(--line);background:var(--surface
   .card .add button{font-size:12px;padding:7px}
   .card-actions .btn-outline{flex:0 0 36px;padding:6px 0;font-size:14px}
   .card-actions .btn-wa{padding:7px;font-size:11.5px}
+  .qty-inline .qbtn{width:26px;height:26px;font-size:14px}
+  .qty-inline .qval{font-size:13px}
   .price b{font-size:14px}
 }
 </style>
@@ -281,7 +288,23 @@ const byId = id => PRODUCTS.find(p=>p.id===id);
 const state = {q:"", sort:"newest"};
 
 let cart = {};
-try{ cart = JSON.parse(localStorage.getItem("ck_cart")||"{}"); }catch(e){ cart={}; }
+function reloadCartFromStorage(){
+  try{ cart = JSON.parse(localStorage.getItem("ck_cart")||"{}") || {}; }catch(e){ cart={}; }
+  if(typeof cart !== "object" || cart === null) cart = {};
+}
+reloadCartFromStorage();
+function pruneCart(){
+  // حذف أي منتج من السلة لم يعد موجوداً في قاعدة البيانات أو أصبح غير متوفر
+  let changed = false;
+  Object.keys(cart).forEach(id=>{
+    const p = byId(+id);
+    if(!p || p.availability === "out"){
+      delete cart[id];
+      changed = true;
+    }
+  });
+  if(changed) localStorage.setItem("ck_cart", JSON.stringify(cart));
+}
 function saveCart(){ localStorage.setItem("ck_cart", JSON.stringify(cart)); updateCartCount(); }
 function cartQty(){ return Object.values(cart).reduce((a,b)=>a+b,0); }
 function addToCart(id, qty){
@@ -309,6 +332,21 @@ function buyNowWA(id){
   window.open("https://wa.me/"+SETTINGS.whatsapp+"?text="+encodeURIComponent(lines.join("\n").trim()),"_blank");
 }
 function setQty(id, qty){ if(qty<=0) delete cart[id]; else cart[id]=qty; saveCart(); }
+function cardStep(id, d){
+  const p=byId(id); if(!p) return;
+  if(p.availability==="out"){ toast("المنتج غير متوفر","err"); return; }
+  const cur = cart[id]||0;
+  const nx = Math.max(0, cur + d);
+  if(nx===0) delete cart[id]; else cart[id]=nx;
+  saveCart();
+  // تحديث فوري لعدّادة البطاقة دون إعادة رسم كل القائمة
+  document.querySelectorAll(`[data-qty-for="${id}"]`).forEach(box=>{
+    const val = box.querySelector(".qval");
+    const minus = box.querySelector(".qminus");
+    if(val) val.textContent = nx;
+    if(minus) minus.disabled = (nx<=0);
+  });
+}
 function cartTotals(){
   const t={SYP:0,USD:0,TRY:0};
   for(const id in cart){ const p=byId(+id); if(!p) continue;
@@ -329,6 +367,24 @@ function navTo(path){
   else go(path);
 }
 window.addEventListener("hashchange", route);
+// مزامنة السلة بين تبويبات المتصفح
+window.addEventListener("storage", e=>{
+  if(e.key === "ck_cart"){
+    reloadCartFromStorage();
+    updateCartCount();
+    if(location.hash.replace(/^#/,"") === "cart") renderCart();
+  }
+});
+// إعادة تحميل البيانات والسلة عند الرجوع للصفحة (من pageshow أيضاً لتجنّب bfcache)
+window.addEventListener("pageshow", async (e)=>{
+  if(e.persisted){
+    await loadData();
+    reloadCartFromStorage();
+    pruneCart();
+    updateCartCount();
+    route();
+  }
+});
 
 function renderChips(active){
   const bar=document.getElementById("chipBar"); if(!bar) return;
@@ -420,7 +476,12 @@ function cardHTML(p){
         <span class="sub">${priceTRY} · ${priceSYP}</span></div>
       <div class="add">${p.availability==="out"
         ?'<button class="btn btn-ghost" disabled>غير متوفر</button>'
-        :`<div class="card-actions">
+        :`<div class="qty-inline" data-qty-for="${p.id}">
+            <button class="qbtn qminus" onclick="cardStep(${p.id},-1)" title="انقاص" ${(cart[p.id]||0)<=0?'disabled':''}>−</button>
+            <span class="qval">${cart[p.id]||0}</span>
+            <button class="qbtn qplus" onclick="cardStep(${p.id},1)" title="زيادة">+</button>
+          </div>
+          <div class="card-actions">
             <button class="btn btn-outline" onclick="addToCart(${p.id},1)" title="أضف للسلة">🛒</button>
             <button class="btn btn-wa" onclick="buyNowWA(${p.id})" title="اطلب عبر واتساب">📲 اطلب</button>
           </div>`}</div>
@@ -652,6 +713,8 @@ document.getElementById("searchInput").addEventListener("input",e=>{
   initTheme();
   const ok = await loadData();
   if(!ok) return;
+  reloadCartFromStorage();
+  pruneCart();
   renderFooter();
   updateCartCount();
   route();

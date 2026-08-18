@@ -179,6 +179,7 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
         <button class="tab active" data-tab="products" onclick="switchTab('products')">📦 المنتجات</button>
         <button class="tab" data-tab="categories" onclick="switchTab('categories')">🗂 الأقسام</button>
         <button class="tab" data-tab="banners" onclick="switchTab('banners')">🎯 الإعلانات</button>
+        <button class="tab" data-tab="rates" onclick="switchTab('rates')">💱 أسعار الصرف</button>
         <button class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ الإعدادات</button>
         <button class="tab" data-tab="backup" onclick="switchTab('backup')">💼 نسخ احتياطي</button>
       </div>
@@ -240,6 +241,47 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
         </label>
       </div>
       <div id="bannersList"></div>
+    </section>
+
+    <section id="tab-rates" class="tab-pane" style="display:none">
+      <div class="section-head">
+        <div><h2>💱 أسعار الصرف المركزية</h2><p>حدّد أسعار التحويل وطبّقها على جميع منتجات المتجر دفعة واحدة.</p></div>
+      </div>
+      <div class="card">
+        <h3>⚙️ العملة المرجعية</h3>
+        <div class="hint" style="margin-bottom:8px">اختر العملة التي تُدخل بها أسعار المنتجات أصلاً (التي لن تتغيّر عند التحويل).</div>
+        <select id="rBaseCur" class="field" style="max-width:300px">
+          <option value="USD">الدولار ($)</option>
+          <option value="TRY">التركي (₺)</option>
+          <option value="SYP">السوري (ل.س)</option>
+        </select>
+      </div>
+      <div class="card">
+        <h3>💱 أسعار التحويل</h3>
+        <div class="hint" style="margin-bottom:10px">الأسعار أدناه تُحدّد كم وحدة من العملة الأخرى تساوي 1 من العملة المرجعية.</div>
+        <div class="row cols-2">
+          <div>
+            <label class="label" id="rRate1Label">1 دولار = ? تركي</label>
+            <input id="rRate1" type="text" inputmode="decimal" class="field" placeholder="33">
+          </div>
+          <div>
+            <label class="label" id="rRate2Label">1 دولار = ? سوري</label>
+            <input id="rRate2" type="text" inputmode="decimal" class="field" placeholder="14000">
+          </div>
+        </div>
+      </div>
+      <div class="card" style="background:rgba(240,165,0,.08);border-color:#f0a500">
+        <h3 style="color:#a4812f">⚠️ تطبيق على جميع المنتجات</h3>
+        <p style="margin:0 0 10px;font-size:13.5px;line-height:1.8">
+          عند الضغط على الزر أدناه، ستُعاد حسابة أسعار العملتين الأخريين لـ <strong id="rCountLabel">كلّ</strong> المنتجات
+          اعتماداً على سعرها بالعملة المرجعية. المنتجات التي لا تحمل سعراً بالعملة المرجعية لن تتأثر.
+        </p>
+        <button class="btn btn-gold" onclick="applyRatesToAll()">🔄 تطبيق أسعار الصرف على جميع المنتجات</button>
+      </div>
+      <div class="card">
+        <h3>👁 معاينة</h3>
+        <div id="ratesPreview" style="line-height:2;font-size:14px"></div>
+      </div>
     </section>
 
     <section id="tab-settings" class="tab-pane" style="display:none">
@@ -331,41 +373,12 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
       <div><label class="label">اسم المنتج *</label><input id="mpName" class="field"></div>
       <div><label class="label">القسم *</label><select id="mpCategory" class="field"></select></div>
     </div>
-    <div class="card" style="background:rgba(201,164,106,.06);border-color:var(--gold);padding:12px;margin-top:12px">
-      <h3 style="margin-bottom:8px;font-size:14px">💱 التحويل الذكي للأسعار</h3>
-      <div class="hint" style="margin-bottom:8px">أدخل السعر بعملة واحدة فقط + أسعار الصرف → الأسعار الأخرى تُحسب تلقائياً.</div>
-      <div class="row cols-2">
-        <div>
-          <label class="label">أدخل السعر بعملة</label>
-          <select id="mpBaseCurrency" class="field">
-            <option value="USD">الدولار ($)</option>
-            <option value="TRY">التركي (₺)</option>
-            <option value="SYP">السوري (ل.س)</option>
-          </select>
-        </div>
-        <div>
-          <label class="label">السعر الأصلي</label>
-          <input id="mpBasePrice" type="text" inputmode="decimal" class="field" placeholder="مثلاً: 1.50">
-        </div>
-      </div>
-      <div class="row cols-2" style="margin-top:8px" id="mpRatesRow">
-        <div>
-          <label class="label" id="mpRate1Label">1 دولار = ? تركي</label>
-          <input id="mpRate1" type="text" inputmode="decimal" class="field" placeholder="33">
-        </div>
-        <div>
-          <label class="label" id="mpRate2Label">1 دولار = ? سوري</label>
-          <input id="mpRate2" type="text" inputmode="decimal" class="field" placeholder="14000">
-        </div>
-      </div>
-      <button type="button" class="btn btn-gold btn-sm" style="margin-top:10px;width:100%" onclick="applyConversion()">🔄 تطبيق التحويل على الأسعار أدناه</button>
-    </div>
     <div class="row cols-3" style="margin-top:10px">
       <div><label class="label">السعر ($) *</label><input id="mpPriceUSD" type="text" inputmode="decimal" class="field" placeholder="1.50"></div>
       <div><label class="label">السعر (₺)</label><input id="mpPriceTRY" type="text" inputmode="decimal" class="field" placeholder="49.5"></div>
       <div><label class="label">السعر (ل.س)</label><input id="mpPriceSYP" type="text" inputmode="decimal" class="field" placeholder="21000"></div>
     </div>
-    <div class="hint" style="margin-top:6px">💡 يمكنك تعديل أي سعر يدوياً بعد التحويل.</div>
+    <div class="hint" style="margin-top:6px">💡 يمكنك إدخال سعر واحد فقط، وتطبيق أسعار الصرف دفعة واحدة من تبويب <strong>💱 أسعار الصرف</strong>.</div>
     <div class="row cols-2" style="margin-top:10px">
       <div><label class="label">الحالة *</label>
         <select id="mpAvail" class="field">
@@ -600,6 +613,7 @@ function renderAll(){
   renderProducts();
   renderCategories();
   renderBanners();
+  renderRates();
   renderSettings();
   renderCategoryDropdowns();
 }
@@ -653,10 +667,6 @@ function renderProducts(){
 function openProductModal(id){
   editingProductId = id || null;
   mpImages = [];
-  $("mpBasePrice").value = "";
-  $("mpBaseCurrency").value = "USD";
-  $("mpRate1").value = "";
-  $("mpRate2").value = "";
   if(id){
     const p = DATA.products.find(x=>x.id===id);
     if(!p){ toast("المنتج غير موجود","error"); return; }
@@ -678,7 +688,6 @@ function openProductModal(id){
     if(DATA.categories[0]) $("mpCategory").value=DATA.categories[0].slug;
   }
   renderProductImages();
-  updateRateLabels();
   $("modalProduct").classList.add("open");
 }
 function closeProductModal(){ $("modalProduct").classList.remove("open"); }
@@ -813,39 +822,90 @@ function bindImageDropzone(){
   dz.addEventListener("click", e=>{ if(e.target.tagName === "BUTTON") return; fi.click(); });
 }
 
-function updateRateLabels(){
-  const base = $("mpBaseCurrency").value;
-  const CUR_NAME = { USD: "دولار", TRY: "تركي", SYP: "سوري" };
-  const CUR_SYM  = { USD: "$", TRY: "₺", SYP: "ل.س" };
+/* ==================== قسم أسعار الصرف المركزية ==================== */
+const CUR_NAME = { USD: "دولار", TRY: "تركي", SYP: "سوري" };
+const CUR_SYM  = { USD: "$", TRY: "₺", SYP: "ل.س" };
+
+function renderRates(){
+  if(!DATA) return;
+  DATA.settings.rates = DATA.settings.rates || {};
+  const base = DATA.settings.baseCurrency || "USD";
+  $("rBaseCur").value = base;
   const others = ["USD","TRY","SYP"].filter(c=>c!==base);
-  const rates = DATA.settings.rates || {};
-  $("mpRate1Label").textContent = `1 ${CUR_NAME[base]} = ? ${CUR_NAME[others[0]]}`;
-  $("mpRate2Label").textContent = `1 ${CUR_NAME[base]} = ? ${CUR_NAME[others[1]]}`;
-  $("mpRate1").dataset.target = others[0];
-  $("mpRate2").dataset.target = others[1];
-  const rKey1 = base + "_" + others[0];
-  const rKey2 = base + "_" + others[1];
-  if(rates[rKey1] != null) $("mpRate1").value = rates[rKey1];
-  if(rates[rKey2] != null) $("mpRate2").value = rates[rKey2];
+  const rates = DATA.settings.rates;
+  $("rRate1Label").textContent = `1 ${CUR_NAME[base]} = ? ${CUR_NAME[others[0]]}`;
+  $("rRate2Label").textContent = `1 ${CUR_NAME[base]} = ? ${CUR_NAME[others[1]]}`;
+  $("rRate1").dataset.target = others[0];
+  $("rRate2").dataset.target = others[1];
+  const k1 = base + "_" + others[0];
+  const k2 = base + "_" + others[1];
+  $("rRate1").value = rates[k1] != null ? rates[k1] : "";
+  $("rRate2").value = rates[k2] != null ? rates[k2] : "";
+  const countWithBase = DATA.products.filter(p=>(p.prices||{})[base] > 0).length;
+  $("rCountLabel").textContent = countWithBase + " من " + DATA.products.length;
+  renderRatesPreview();
 }
 
-function applyConversion(){
-  const base = $("mpBaseCurrency").value;
-  const basePrice = parsePrice($("mpBasePrice").value);
-  const r1 = parsePrice($("mpRate1").value);
-  const r2 = parsePrice($("mpRate2").value);
-  if(!basePrice){ toast("أدخل السعر الأصلي","error"); return; }
-  if(!r1 || !r2){ toast("أدخل أسعار التحويل","error"); return; }
-  const others = [$("mpRate1").dataset.target, $("mpRate2").dataset.target];
-  const results = { [base]: basePrice, [others[0]]: basePrice * r1, [others[1]]: basePrice * r2 };
-  $("mpPriceUSD").value = results.USD ? (Math.round(results.USD*100)/100) : "";
-  $("mpPriceTRY").value = results.TRY ? (Math.round(results.TRY*100)/100) : "";
-  $("mpPriceSYP").value = results.SYP ? Math.round(results.SYP/50)*50 : "";
-  DATA.settings.rates = DATA.settings.rates || {};
-  DATA.settings.rates[base + "_" + others[0]] = r1;
-  DATA.settings.rates[base + "_" + others[1]] = r2;
+function renderRatesPreview(){
+  const base = $("rBaseCur").value;
+  const r1 = parsePrice($("rRate1").value);
+  const r2 = parsePrice($("rRate2").value);
+  const others = [$("rRate1").dataset.target, $("rRate2").dataset.target];
+  const sample = 100;
+  const out = [];
+  out.push(`تطبيق التحويل على منتج سعره <strong>${sample} ${CUR_SYM[base]}</strong>:`);
+  if(r1>0) out.push(`▸ ${CUR_NAME[others[0]]}: <strong>${(sample*r1).toLocaleString("en-US")} ${CUR_SYM[others[0]]}</strong>`);
+  if(r2>0) out.push(`▸ ${CUR_NAME[others[1]]}: <strong>${(sample*r2).toLocaleString("en-US")} ${CUR_SYM[others[1]]}</strong>`);
+  $("ratesPreview").innerHTML = out.join("<br>");
+}
+
+function bindRatesTab(){
+  $("rBaseCur").addEventListener("change", e=>{
+    DATA.settings.baseCurrency = e.target.value;
+    renderRates();
+    updateDirty();
+  });
+  ["rRate1","rRate2"].forEach(id=>{
+    $(id).addEventListener("input", ()=>{
+      const base = $("rBaseCur").value;
+      const target = $(id).dataset.target;
+      const val = parsePrice($(id).value);
+      DATA.settings.rates = DATA.settings.rates || {};
+      DATA.settings.rates[base + "_" + target] = val;
+      renderRatesPreview();
+      updateDirty();
+    });
+  });
+}
+
+function applyRatesToAll(){
+  const base = $("rBaseCur").value;
+  const r1 = parsePrice($("rRate1").value);
+  const r2 = parsePrice($("rRate2").value);
+  const others = [$("rRate1").dataset.target, $("rRate2").dataset.target];
+  if(!r1 || !r2){ toast("أدخل أسعار التحويل أولاً","error"); return; }
+  const eligible = DATA.products.filter(p=>(p.prices||{})[base] > 0);
+  if(!eligible.length){
+    toast("لا توجد منتجات لها سعر بـ " + CUR_NAME[base],"error");
+    return;
+  }
+  if(!confirm(`سيتم تحديث أسعار ${eligible.length} منتج على أساس أن:\n\n1 ${CUR_NAME[base]} = ${r1} ${CUR_NAME[others[0]]}\n1 ${CUR_NAME[base]} = ${r2} ${CUR_NAME[others[1]]}\n\nمتابعة؟`)) return;
+  let updated = 0;
+  DATA.products.forEach(p=>{
+    const baseVal = (p.prices||{})[base];
+    if(!baseVal || baseVal <= 0) return;
+    p.prices = p.prices || {};
+    const v1 = baseVal * r1;
+    const v2 = baseVal * r2;
+    p.prices[others[0]] = (others[0]==="SYP") ? Math.round(v1/50)*50 : Math.round(v1*100)/100;
+    p.prices[others[1]] = (others[1]==="SYP") ? Math.round(v2/50)*50 : Math.round(v2*100)/100;
+    updated++;
+  });
+  DATA.settings.baseCurrency = base;
+  renderProducts();
+  renderRates();
   updateDirty();
-  toast("✓ تم تطبيق التحويل","success");
+  toast(`✓ تم تحديث أسعار ${updated} منتج — اضغط حفظ للنشر`,"success");
 }
 
 function parsePrice(input){
@@ -1167,7 +1227,7 @@ document.querySelectorAll(".modal-bg").forEach(m=>{
 (async function init(){
   bindSettings();
   bindImageDropzone();
-  $("mpBaseCurrency").addEventListener("change", updateRateLabels);
+  bindRatesTab();
   if(!(await autoLogin())){
     $("loginScreen").style.display="grid";
     $("appScreen").style.display="none";
