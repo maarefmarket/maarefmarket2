@@ -277,9 +277,17 @@ const CUR = [["USD","$"],["TRY","₺"],["SYP","ل.س"]];
 const PRIMARY = "USD";
 const fmtN = v => new Intl.NumberFormat("en-US",{maximumFractionDigits:2}).format(v||0);
 function money(v,c){
-  if(c==="SYP") return new Intl.NumberFormat("en-US").format(Math.round((v||0)/50)*50)+" ل.س";
+  const num = parseFloat(v) || 0;
+  if(c==="SYP"){
+    // للعملة السورية الجديدة: أرقام صغيرة مع فواصل ممكنة
+    // لا نقرّب إلى 50، فقط نعرض رقمين عشريين إن وجدا
+    const formatted = num % 1 === 0
+      ? new Intl.NumberFormat("en-US").format(num)
+      : new Intl.NumberFormat("en-US",{minimumFractionDigits:1,maximumFractionDigits:2}).format(num);
+    return formatted+" ل.س";
+  }
   const sym = c==="USD"?"$":c==="TRY"?"₺":c;
-  return fmtN(v)+" "+sym;
+  return fmtN(num)+" "+sym;
 }
 const catName = s => (CATEGORIES.find(c=>c.slug===s)||{}).name || "";
 const availText = a => a==="in"?"متوفر":a==="limited"?"كمية محدودة":"غير متوفر";
@@ -323,6 +331,7 @@ function buyNowWA(id){
   const p=byId(id);
   if(!p||p.availability==="out"){ toast("المنتج غير متوفر","err"); return; }
   if(!SETTINGS.whatsapp){ toast("لم يتم ضبط رقم واتساب","err"); return; }
+  const vis = visibleCurs(p);
   const lines=[];
   lines.push("السلام عليكم");
   lines.push("أريد شراء هذا المنتج:");
@@ -330,9 +339,9 @@ function buyNowWA(id){
   lines.push(`• *${p.name}* × 1`);
   lines.push("");
   lines.push("السعر:");
-  if(p.prices.TRY>0) lines.push(`• التركي: *${money(p.prices.TRY,"TRY")}*`);
-  if(p.prices.SYP>0) lines.push(`• السوري: *${money(p.prices.SYP,"SYP")}*`);
-  if(p.prices.USD>0) lines.push(`• الدولار: *${money(p.prices.USD,"USD")}*`);
+  if(vis.includes("TRY") && p.prices.TRY>0) lines.push(`• التركي: *${money(p.prices.TRY,"TRY")}*`);
+  if(vis.includes("SYP") && p.prices.SYP>0) lines.push(`• السوري: *${money(p.prices.SYP,"SYP")}*`);
+  if(vis.includes("USD") && p.prices.USD>0) lines.push(`• الدولار: *${money(p.prices.USD,"USD")}*`);
   lines.push("");
   lines.push("شكراً لكم 🌿");
   window.open("https://wa.me/"+SETTINGS.whatsapp+"?text="+encodeURIComponent(lines.join("\n").trim()),"_blank");
@@ -355,8 +364,19 @@ function cardStep(id, d){
 }
 function cartTotals(){
   const t={SYP:0,USD:0,TRY:0};
+  // تتبّع أي عملة مرئية لواحد أو أكثر من منتجات السلة
+  const anyVisible = {SYP:false, USD:false, TRY:false};
   for(const id in cart){ const p=byId(+id); if(!p) continue;
-    for(const [c] of CUR) t[c]+=(p.prices[c]||0)*cart[id]; }
+    const vis = visibleCurs(p);
+    for(const [c] of CUR){
+      if(vis.includes(c) && (p.prices[c]||0)>0){
+        t[c] += (p.prices[c]||0)*cart[id];
+        anyVisible[c] = true;
+      }
+    }
+  }
+  // أما العملات غير المرئية في أي منتج → أرجعها إلى 0 لإخفائها في إجمالي السلة
+  for(const c of Object.keys(t)) if(!anyVisible[c]) t[c] = 0;
   return t;
 }
 function updateCartCount(){
@@ -451,12 +471,23 @@ function getList(mode, slug){
   return list;
 }
 
+// إرجاع قائمة العملات المرئية لمنتج
+function visibleCurs(p){
+  const sc = p.showCurrencies || {};
+  return CUR.filter(([c])=>{
+    if(sc[c] === false) return false;
+    return (p.prices[c]||0) > 0;
+  }).map(([c])=>c);
+}
+
 function cardHTML(p){
   const offer=p.oldPrices && (p.oldPrices[PRIMARY]||0) > (p.prices[PRIMARY]||0);
   const img = (p.images&&p.images[0])||"";
-  const priceUSD = money(p.prices.USD||0,"USD");
-  const priceTRY = money(p.prices.TRY||0,"TRY");
-  const priceSYP = money(p.prices.SYP||0,"SYP");
+  const vis = visibleCurs(p);
+  const primary = vis.includes(PRIMARY) ? PRIMARY : (vis[0] || PRIMARY);
+  const others = vis.filter(c=>c!==primary);
+  const mainPrice = money(p.prices[primary]||0, primary);
+  const subPrices = others.map(c=>money(p.prices[c]||0,c)).join(" · ");
   const badges = [];
   if(isNew(p)) badges.push('<span class="badge new">جديد</span>');
   if(p.availability==="limited") badges.push('<span class="badge limited">محدود</span>');
@@ -470,8 +501,8 @@ function cardHTML(p){
       <div class="cat" onclick="event.stopPropagation();navTo('category/${p.category}')">${catName(p.category)}</div>
       <div class="name" onclick="go('product/${p.id}')">${p.name}</div>
       <div class="desc">${p.description||""}</div>
-      <div class="price"><b>${priceUSD}</b>${offer?`<s>${money(p.oldPrices.USD||0,"USD")}</s>`:''}
-        <span class="sub">${priceTRY} · ${priceSYP}</span></div>
+      <div class="price"><b>${mainPrice}</b>${offer && vis.includes(PRIMARY)?`<s>${money(p.oldPrices[PRIMARY]||0,PRIMARY)}</s>`:''}
+        ${subPrices?`<span class="sub">${subPrices}</span>`:''}</div>
       <div class="add">${p.availability==="out"
         ?'<button class="btn btn-ghost" disabled>غير متوفر</button>'
         :`<div class="qty-inline" data-qty-for="${p.id}">
@@ -526,7 +557,8 @@ function renderProduct(id){
   gImg=0;
   const offer=p.oldPrices && (p.oldPrices[PRIMARY]||0) > (p.prices[PRIMARY]||0);
   const imgs = p.images && p.images.length ? p.images : [""];
-  const pricesRows = CUR.filter(([c]) => (p.prices[c]||0) > 0).map(([c])=>`
+  const visP = visibleCurs(p);
+  const pricesRows = CUR.filter(([c]) => visP.includes(c)).map(([c])=>`
     <div class="pr"><span class="cur">${({SYP:'الليرة السورية',USD:'الدولار الأمريكي',TRY:'الليرة التركية'})[c]}</span>
     <span class="val">${money(p.prices[c],c)}${offer&&p.oldPrices&&p.oldPrices[c]?`<s>${money(p.oldPrices[c],c)}</s>`:''}</span></div>`).join("");
   document.getElementById("app").innerHTML = `
@@ -600,15 +632,17 @@ function renderCart(){
         </div></div>`;
     }
     const img = (p.images&&p.images[0])||"";
+    const visCart = visibleCurs(p);
+    const primCart = visCart.includes(PRIMARY) ? PRIMARY : (visCart[0] || PRIMARY);
     return `<div class="cart-item">
       ${img?`<img src="${img}" alt="${p.name}" onclick="go('product/${p.id}')" style="cursor:pointer">`:'<div style="width:68px;height:68px;background:var(--elevated);border-radius:10px"></div>'}
       <div class="ci-body">
         <div class="ci-name">${p.name}</div>
-        <div class="ci-price">${money(p.prices[PRIMARY],PRIMARY)} · للقطعة</div>
+        <div class="ci-price">${money(p.prices[primCart],primCart)} · للقطعة</div>
         <div class="qty" style="margin-top:5px"><button onclick="cartStep(${p.id},-1)">−</button><span>${q}</span><button onclick="cartStep(${p.id},1)">+</button></div>
       </div>
       <div style="text-align:end">
-        <div style="font-weight:700;color:var(--forest)">${money((p.prices[PRIMARY]||0)*q,PRIMARY)}</div>
+        <div style="font-weight:700;color:var(--forest)">${money((p.prices[primCart]||0)*q,primCart)}</div>
         <button class="link-remove" onclick="cartRemove(${p.id})">حذف</button>
       </div></div>`;
   }).join("");
@@ -647,8 +681,11 @@ function checkout(){
   lines.push("");
   for(const id of ids){
     const p=byId(+id); const q=cart[id];
-    const unit = p.prices.USD || 0;
-    lines.push(`• *${p.name}* × ${q} — ${money(unit*q,"USD")}`);
+    const vis = visibleCurs(p);
+    // العملة المعروضة في الرسالة: الأولى المرئية
+    const primary = vis.includes("USD") ? "USD" : (vis[0] || "USD");
+    const unit = p.prices[primary] || 0;
+    lines.push(`• *${p.name}* × ${q} — ${money(unit*q, primary)}`);
   }
   lines.push("");
   lines.push("السعر النهائي الإجمالي:");

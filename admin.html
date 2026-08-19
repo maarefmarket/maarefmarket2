@@ -374,11 +374,38 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
       <div><label class="label">القسم *</label><select id="mpCategory" class="field"></select></div>
     </div>
     <div class="row cols-3" style="margin-top:10px">
-      <div><label class="label">السعر ($) *</label><input id="mpPriceUSD" type="text" inputmode="decimal" class="field" placeholder="1.50"></div>
-      <div><label class="label">السعر (₺)</label><input id="mpPriceTRY" type="text" inputmode="decimal" class="field" placeholder="49.5"></div>
-      <div><label class="label">السعر (ل.س)</label><input id="mpPriceSYP" type="text" inputmode="decimal" class="field" placeholder="21000"></div>
+      <div>
+        <label class="label" style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+          <span>السعر ($)</span>
+          <label style="display:inline-flex;align-items:center;gap:4px;font-weight:400;font-size:12px;cursor:pointer">
+            <input type="checkbox" id="mpShowUSD" checked style="width:14px;height:14px;cursor:pointer">
+            <span>إظهار</span>
+          </label>
+        </label>
+        <input id="mpPriceUSD" type="text" inputmode="decimal" class="field" placeholder="1.50">
+      </div>
+      <div>
+        <label class="label" style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+          <span>السعر (₺)</span>
+          <label style="display:inline-flex;align-items:center;gap:4px;font-weight:400;font-size:12px;cursor:pointer">
+            <input type="checkbox" id="mpShowTRY" checked style="width:14px;height:14px;cursor:pointer">
+            <span>إظهار</span>
+          </label>
+        </label>
+        <input id="mpPriceTRY" type="text" inputmode="decimal" class="field" placeholder="49.5">
+      </div>
+      <div>
+        <label class="label" style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+          <span>السعر (ل.س)</span>
+          <label style="display:inline-flex;align-items:center;gap:4px;font-weight:400;font-size:12px;cursor:pointer">
+            <input type="checkbox" id="mpShowSYP" checked style="width:14px;height:14px;cursor:pointer">
+            <span>إظهار</span>
+          </label>
+        </label>
+        <input id="mpPriceSYP" type="text" inputmode="decimal" class="field" placeholder="10.5">
+      </div>
     </div>
-    <div class="hint" style="margin-top:6px">💡 يمكنك إدخال سعر واحد فقط، وتطبيق أسعار الصرف دفعة واحدة من تبويب <strong>💱 أسعار الصرف</strong>.</div>
+    <div class="hint" style="margin-top:6px">💡 يمكنك إدخال سعر واحد فقط، وتطبيق أسعار الصرف دفعة واحدة من تبويب <strong>💱 أسعار الصرف</strong>. مربّع <strong>إظهار</strong> أعلى كل سعر يتحكم بظهور العملة في الموقع.</div>
     <div class="row cols-2" style="margin-top:10px">
       <div><label class="label">الحالة *</label>
         <select id="mpAvail" class="field">
@@ -676,6 +703,10 @@ function openProductModal(id){
     $("mpPriceUSD").value=p.prices?.USD||"";
     $("mpPriceTRY").value=p.prices?.TRY||"";
     $("mpPriceSYP").value=p.prices?.SYP||"";
+    const showCur = p.showCurrencies || {};
+    $("mpShowUSD").checked = showCur.USD !== false;
+    $("mpShowTRY").checked = showCur.TRY !== false;
+    $("mpShowSYP").checked = showCur.SYP !== false;
     $("mpAvail").value=p.availability||"in";
     $("mpViews").value=p.views||0;
     $("mpDesc").value=p.description||"";
@@ -684,6 +715,9 @@ function openProductModal(id){
   } else {
     $("modalProductTitle").textContent="منتج جديد";
     ["mpName","mpPriceUSD","mpPriceTRY","mpPriceSYP","mpViews","mpDesc","mpNotes","mpImgInput"].forEach(id=>$(id).value="");
+    $("mpShowUSD").checked = true;
+    $("mpShowTRY").checked = true;
+    $("mpShowSYP").checked = true;
     $("mpAvail").value="in";
     if(DATA.categories[0]) $("mpCategory").value=DATA.categories[0].slug;
   }
@@ -897,8 +931,9 @@ function applyRatesToAll(){
     p.prices = p.prices || {};
     const v1 = baseVal * r1;
     const v2 = baseVal * r2;
-    p.prices[others[0]] = (others[0]==="SYP") ? Math.round(v1/50)*50 : Math.round(v1*100)/100;
-    p.prices[others[1]] = (others[1]==="SYP") ? Math.round(v2/50)*50 : Math.round(v2*100)/100;
+    // تقريب لرقمين عشريين لكل العملات (مناسب للعملة السورية الجديدة أيضًا)
+    p.prices[others[0]] = Math.round(v1*100)/100;
+    p.prices[others[1]] = Math.round(v2*100)/100;
     updated++;
   });
   DATA.settings.baseCurrency = base;
@@ -912,20 +947,28 @@ function parsePrice(input){
   if(input == null) return 0;
   let s = String(input).trim();
   if(!s) return 0;
+  // تحويل الأرقام العربية إلى إنجليزية
   s = s.replace(/[٠-٩]/g, d => String.fromCharCode(d.charCodeAt(0)-0x0660+0x30));
+  // توحيد الفواصل العربية
   s = s.replace(/[٫٬]/g, ",").replace(/[^\d.,\-]/g, "");
   if(!s) return 0;
   const lastDot = s.lastIndexOf(".");
   const lastCom = s.lastIndexOf(",");
   let decSep = "";
-  if(lastDot !== -1 && lastCom !== -1){ decSep = (lastDot > lastCom) ? "." : ","; }
+  if(lastDot !== -1 && lastCom !== -1){
+    // إذا وجد الإثنان → الأخير هو الفاصل العشري
+    decSep = (lastDot > lastCom) ? "." : ",";
+  }
   else if(lastDot !== -1 || lastCom !== -1){
     const sep = (lastDot !== -1) ? "." : ",";
     const idx = (lastDot !== -1) ? lastDot : lastCom;
     const count = (s.match(new RegExp("\\" + sep, "g")) || []).length;
     const after = s.length - idx - 1;
+    // فاصلان أو أكثر → فواصل آلاف (ليس عشريًا)
     if(count > 1) decSep = "";
-    else if(after === 3) decSep = "";
+    // فاصل واحد يتبعه 3 أرقام تمامًا وليس في أول الرقم → فاصل آلاف (مثل 12,000)
+    else if(after === 3 && idx > 0) decSep = "";
+    // خلاف ذلك (1.5، 0.75، 1,5، 100.25) → فاصل عشري
     else decSep = sep;
   }
   if(decSep === "."){ s = s.replace(/,/g, ""); }
@@ -947,6 +990,11 @@ function saveProduct(){
     id: editingProductId || (Math.max(0, ...DATA.products.map(x=>x.id))+1),
     name, category,
     prices: {USD: sUSD||0, TRY: sTRY||0, SYP: sSYP||0},
+    showCurrencies: {
+      USD: $("mpShowUSD").checked,
+      TRY: $("mpShowTRY").checked,
+      SYP: $("mpShowSYP").checked
+    },
     availability: $("mpAvail").value,
     views: +$("mpViews").value || 0,
     description: $("mpDesc").value.trim(),
