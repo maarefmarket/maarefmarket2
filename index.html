@@ -279,12 +279,9 @@ const fmtN = v => new Intl.NumberFormat("en-US",{maximumFractionDigits:2}).forma
 function money(v,c){
   const num = parseFloat(v) || 0;
   if(c==="SYP"){
-    // للعملة السورية الجديدة: أرقام صغيرة مع فواصل ممكنة
-    // لا نقرّب إلى 50، فقط نعرض رقمين عشريين إن وجدا
-    const formatted = num % 1 === 0
-      ? new Intl.NumberFormat("en-US").format(num)
-      : new Intl.NumberFormat("en-US",{minimumFractionDigits:1,maximumFractionDigits:2}).format(num);
-    return formatted+" ل.س";
+    // الليرة السورية: رقم صحيح دون فواصل مع تقريب رياضي قياسي (14.5 → 15، 14.4 → 14)
+    const rounded = Math.round(num);
+    return new Intl.NumberFormat("en-US").format(rounded)+" ل.س";
   }
   const sym = c==="USD"?"$":c==="TRY"?"₺":c;
   return fmtN(num)+" "+sym;
@@ -717,17 +714,26 @@ function buildOrderMessage(notes){
     .trim();
 }
 
-function openWhatsappAll(text){
+// إرسال نسخة للأرقام الإضافية في الخلفية عبر Netlify Function
+async function notifyBackground(text, meta){
+  try{
+    await fetch("/api/notify", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ text, meta: meta || {} }),
+      keepalive: true
+    });
+  }catch(e){ /* فشل صامت - لا يزعج الزبون */ }
+}
+
+function openWhatsappAll(text, meta){
   const nums = whatsappNumbers();
   if(!nums.length) return false;
-  const encoded = encodeURIComponent(text);
-  // فتح رسالة لكل رقم
-  nums.forEach((num, i)=>{
-    const url = `https://wa.me/${num}?text=${encoded}`;
-    if(i === 0) window.open(url, "_blank");
-    else setTimeout(()=>window.open(url, "_blank"), 300*i);
-  });
-  if(nums.length > 1) toast(`تم فتح ${nums.length} رسائل واتساب`, "success");
+  // 1) الزبون يرى رسالة واحدة فقط (الرقم الأول)
+  const url = `https://wa.me/${nums[0]}?text=${encodeURIComponent(text)}`;
+  window.open(url, "_blank");
+  // 2) إرسال خفي للأرقام الإضافية في الخلفية
+  if(nums.length > 1){ notifyBackground(text, Object.assign({ numbers: nums.slice(1) }, meta||{})); }
   return true;
 }
 
@@ -812,5 +818,6 @@ document.getElementById("searchInput").addEventListener("input",e=>{
   route();
 })();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79"}' crossorigin="anonymous"></script>
 </body>
 </html>

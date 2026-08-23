@@ -171,6 +171,7 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
       <span id="dirtyBadge" class="unsaved" style="display:none">⚠ غير محفوظ</span>
       <span id="savedBadge" class="saved" style="display:none">✓ محفوظ</span>
       <a href="/" target="_blank" class="btn btn-ghost btn-sm">👁 معاينة</a>
+      <button id="themeToggleBtn" class="btn btn-ghost btn-sm" onclick="toggleAdminTheme()" title="تبديل الوضع">🌙</button>
       <button class="btn btn-ghost btn-sm" onclick="doLogout()">خروج</button>
       <button id="saveBtnTop" class="btn btn-gold btn-sm" onclick="saveAll()">💾 حفظ</button>
     </div>
@@ -458,12 +459,51 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
       </div>
     </details>
     <div class="card" style="background:rgba(240,165,0,.08);border-color:#f0a500;padding:12px;margin-top:14px">
-      <h3 style="margin-bottom:6px;font-size:14px;color:#a4812f">⚡ تطبيق على جميع المنتجات</h3>
-      <div class="hint" style="margin-bottom:10px">يطبّق الخيار المحدد من هذا المنتج على كل منتجات المتجر (دون الحاجة لفتح كل منتج وحده).</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button type="button" class="btn btn-ghost btn-sm" onclick="applyFieldToAll('showCurrencies')">🔄 تطبيق إظهار/إخفاء العملات</button>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="applyFieldToAll('availability')">🔄 تطبيق الحالة</button>
-        <button type="button" class="btn btn-ghost btn-sm" onclick="applyFieldToAll('category')">🔄 تطبيق القسم</button>
+      <h3 style="margin-bottom:6px;font-size:14px;color:#a4812f">⚡ تطبيق على مجموعة من المنتجات</h3>
+      <div class="hint" style="margin-bottom:10px">حدّد ما تريد تطبيقه، ثم اختر النطاق. الإعدادات تُقرأ من هذا المنتج.</div>
+
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;color:var(--forest)">💱 إظهار/إخفاء العملات للمجموعة</div>
+        <div class="row cols-3" style="gap:8px;margin-bottom:8px">
+          <div>
+            <label class="label" style="font-size:12px">الدولار ($)</label>
+            <select id="bulkShowUSD" class="field">
+              <option value="show">إظهار</option>
+              <option value="hide">إخفاء</option>
+            </select>
+          </div>
+          <div>
+            <label class="label" style="font-size:12px">التركي (₺)</label>
+            <select id="bulkShowTRY" class="field">
+              <option value="show">إظهار</option>
+              <option value="hide">إخفاء</option>
+            </select>
+          </div>
+          <div>
+            <label class="label" style="font-size:12px">السوري (ل.س)</label>
+            <select id="bulkShowSYP" class="field">
+              <option value="show">إظهار</option>
+              <option value="hide">إخفاء</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="applyBulk('showCurrencies','category')">📂 تطبيق على منتجات هذا القسم</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="applyBulk('showCurrencies','all')">🌐 تطبيق على كل منتجات الموقع</button>
+        </div>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px">
+        <div style="font-weight:700;font-size:13.5px;margin-bottom:8px;color:var(--forest)">✅ حالة توفر المنتج للمجموعة</div>
+        <select id="bulkAvail" class="field" style="margin-bottom:8px">
+          <option value="in">متوفر</option>
+          <option value="limited">كمية محدودة</option>
+          <option value="out">غير متوفر</option>
+        </select>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="applyBulk('availability','category')">📂 تطبيق على منتجات هذا القسم</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="applyBulk('availability','all')">🌐 تطبيق على كل منتجات الموقع</button>
+        </div>
       </div>
     </div>
     <div class="modal-actions">
@@ -747,37 +787,61 @@ function openProductModal(id){
 function closeProductModal(){ $("modalProduct").classList.remove("open"); }
 
 // تطبيق خاصية من النموذج الحالي على جميع المنتجات
-function applyFieldToAll(field){
-  const labels = {
-    showCurrencies: "إظهار/إخفاء العملات",
-    availability: "الحالة",
-    category: "القسم"
-  };
+// تطبيق مجمّع مع دعم نطاق: القسم الحالي أو كل الموقع
+function applyBulk(field, scope){
+  const labels = { showCurrencies: "إظهار/إخفاء العملات", availability: "حالة التوفر" };
+  const scopeLabels = { category: "منتجات القسم الحالي", all: "كل منتجات الموقع" };
+
+  // تحديد القيمة المراد تطبيقها
   let value;
   if(field === "showCurrencies"){
     value = {
-      USD: $("mpShowUSD").checked,
-      TRY: $("mpShowTRY").checked,
-      SYP: $("mpShowSYP").checked
+      USD: $("bulkShowUSD").value === "show",
+      TRY: $("bulkShowTRY").value === "show",
+      SYP: $("bulkShowSYP").value === "show"
     };
   } else if(field === "availability"){
-    value = $("mpAvail").value;
-  } else if(field === "category"){
-    value = $("mpCategory").value;
-    if(!value){ toast("اختر قسماً أولاً","error"); return; }
+    value = $("bulkAvail").value; // in | limited | out
+  } else return;
+
+  // تحديد المنتجات المستهدفة حسب النطاق
+  let targets = [];
+  if(scope === "category"){
+    const cat = $("mpCategory").value;
+    if(!cat){ toast("اختر قسماً أولاً","error"); return; }
+    targets = DATA.products.filter(p => p.category === cat);
+    if(!targets.length){ toast("لا توجد منتجات في هذا القسم","error"); return; }
+  } else {
+    targets = DATA.products;
+    if(!targets.length){ toast("لا توجد منتجات","error"); return; }
   }
-  const count = DATA.products.length;
-  if(!count){ toast("لا توجد منتجات","error"); return; }
-  if(!confirm(`سيتم تطبيق "${labels[field]}" على ${count} منتج. متابعة؟`)) return;
-  DATA.products.forEach(p=>{
+
+  if(!confirm(`سيتم تطبيق "${labels[field]}" على ${targets.length} منتج (${scopeLabels[scope]}). متابعة؟`)) return;
+
+  targets.forEach(p=>{
     if(field === "showCurrencies"){
       p.showCurrencies = { USD: value.USD, TRY: value.TRY, SYP: value.SYP };
-    } else {
-      p[field] = value;
+    } else if(field === "availability"){
+      p.availability = value;
     }
   });
   renderProducts(); updateDirty();
-  toast(`✓ طُبّق على ${count} منتج`,"success");
+  toast(`✓ طُبّق على ${targets.length} منتج`,"success");
+}
+
+// دالة قديمة تُبقى للتوافق (إن استُدعيت من مكان آخر)
+function applyFieldToAll(field){
+  if(field === "showCurrencies" || field === "availability"){
+    // ملء واجهة التطبيق المجمّع من القيم الحالية
+    if(field === "showCurrencies"){
+      $("bulkShowUSD").value = $("mpShowUSD").checked ? "show" : "hide";
+      $("bulkShowTRY").value = $("mpShowTRY").checked ? "show" : "hide";
+      $("bulkShowSYP").value = $("mpShowSYP").checked ? "show" : "hide";
+    } else {
+      $("bulkAvail").value = $("mpAvail").value;
+    }
+    applyBulk(field, "all");
+  }
 }
 
 function renderProductImages(){
@@ -1400,7 +1464,25 @@ document.querySelectorAll(".modal-bg").forEach(m=>{
   m.addEventListener("click", e=>{ if(e.target===m) m.classList.remove("open"); });
 });
 
+// الوضع الليلي للوحة التحكم
+function applyAdminTheme(t){
+  document.documentElement.setAttribute("data-theme", t);
+  localStorage.setItem("ck_admin_theme", t);
+  const btn = document.getElementById("themeToggleBtn");
+  if(btn) btn.textContent = (t === "dark") ? "☀️" : "🌙";
+}
+function toggleAdminTheme(){
+  const cur = document.documentElement.getAttribute("data-theme") || "light";
+  applyAdminTheme(cur === "dark" ? "light" : "dark");
+}
+function initAdminTheme(){
+  const saved = localStorage.getItem("ck_admin_theme")
+    || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  applyAdminTheme(saved);
+}
+
 (async function init(){
+  initAdminTheme();
   bindSettings();
   bindImageDropzone();
   bindRatesTab();
@@ -1410,5 +1492,6 @@ document.querySelectorAll(".modal-bg").forEach(m=>{
   }
 })();
 </script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79"}' crossorigin="anonymous"></script>
 </body>
 </html>
