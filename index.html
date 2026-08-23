@@ -330,21 +330,21 @@ function addToCart(id, qty){
 function buyNowWA(id){
   const p=byId(id);
   if(!p||p.availability==="out"){ toast("المنتج غير متوفر","err"); return; }
-  if(!SETTINGS.whatsapp){ toast("لم يتم ضبط رقم واتساب","err"); return; }
-  const vis = visibleCurs(p);
-  const lines=[];
-  lines.push("السلام عليكم");
-  lines.push("أريد شراء هذا المنتج:");
-  lines.push("");
-  lines.push(`• *${p.name}* × 1`);
-  lines.push("");
-  lines.push("السعر:");
-  if(vis.includes("TRY") && p.prices.TRY>0) lines.push(`• التركي: *${money(p.prices.TRY,"TRY")}*`);
-  if(vis.includes("SYP") && p.prices.SYP>0) lines.push(`• السوري: *${money(p.prices.SYP,"SYP")}*`);
-  if(vis.includes("USD") && p.prices.USD>0) lines.push(`• الدولار: *${money(p.prices.USD,"USD")}*`);
-  lines.push("");
-  lines.push("شكراً لكم 🌿");
-  window.open("https://wa.me/"+SETTINGS.whatsapp+"?text="+encodeURIComponent(lines.join("\n").trim()),"_blank");
+  if(!whatsappNumbers().length){ toast("لم يتم ضبط رقم واتساب","err"); return; }
+  // إضافة مؤقتة للسلة لبناء رسالة موحدة
+  const backup = Object.assign({}, cart);
+  cart = { [id]: 1 };
+  const msg = buildOrderMessage("");
+  cart = backup; saveCart();
+  if(msg) openWhatsappAll(msg);
+}
+function inquireWA(id){
+  const p=byId(id);
+  if(!p) return;
+  const nums = whatsappNumbers();
+  if(!nums.length){ toast("لم يتم ضبط رقم واتساب","err"); return; }
+  const text = `مرحباً ${SETTINGS.storeName||""}، مهتم بمنتج: ${p.name}`;
+  openWhatsappAll(text);
 }
 function setQty(id, qty){ if(qty<=0) delete cart[id]; else cart[id]=qty; saveCart(); }
 function cardStep(id, d){
@@ -587,8 +587,8 @@ function renderProduct(id){
           </div>
           <button class="btn btn-gold" style="flex:1" onclick="addFromPage(${p.id})">أضف إلى السلة 🛒</button>
         </div>`:'<button class="btn btn-ghost" disabled>غير متوفر حالياً</button>'}
-        ${SETTINGS.whatsapp?`<div class="row">
-          <a class="btn btn-wa" target="_blank" href="https://wa.me/${SETTINGS.whatsapp}?text=${encodeURIComponent('مرحباً '+(SETTINGS.storeName||"")+'، مهتم بمنتج: '+p.name)}">استفسار عبر واتساب</a>
+        ${whatsappNumbers().length?`<div class="row">
+          <button class="btn btn-wa" onclick="inquireWA(${p.id})" style="width:100%">استفسار عبر واتساب</button>
         </div>`:''}
       </div>
     </div>`;
@@ -668,34 +668,78 @@ function renderCart(){
 }
 function cartStep(id,d){ const q=(cart[id]||0)+d; setQty(id,q); renderCart(); }
 function cartRemove(id){ delete cart[id]; saveCart(); renderCart(); }
-function checkout(){
-  const notes=(document.getElementById("cNotes").value||"").trim();
-  const err=document.getElementById("cErr");
-  if(!SETTINGS.whatsapp){ err.textContent="لم يتم ضبط رقم واتساب المتجر"; return; }
+// إرجاع قائمة أرقام الواتساب (دعم الحقل القديم والجديد)
+function whatsappNumbers(){
+  const list = Array.isArray(SETTINGS.whatsapps) ? SETTINGS.whatsapps : [];
+  const nums = list.map(x => String(x||"").replace(/\D/g,"")).filter(Boolean);
+  if(nums.length) return nums;
+  const one = String(SETTINGS.whatsapp||"").replace(/\D/g,"");
+  return one ? [one] : [];
+}
+
+const DEFAULT_MSG_TEMPLATE = `السلام عليكم
+أريد شراء هذه الأشياء:
+
+{items}
+
+السعر النهائي الإجمالي:
+{totals}
+
+{notes}
+
+شكراً لكم 🌿`;
+
+function buildOrderMessage(notes){
   const ids = Object.keys(cart).filter(id => byId(+id));
-  if(!ids.length){ err.textContent="السلة فارغة"; return; }
+  if(!ids.length) return "";
   const t = cartTotals();
-  const lines = [];
-  lines.push("السلام عليكم");
-  lines.push("أريد شراء هذه الأشياء:");
-  lines.push("");
+  const itemLines = [];
   for(const id of ids){
     const p=byId(+id); const q=cart[id];
     const vis = visibleCurs(p);
-    // العملة المعروضة في الرسالة: الأولى المرئية
     const primary = vis.includes("USD") ? "USD" : (vis[0] || "USD");
     const unit = p.prices[primary] || 0;
-    lines.push(`• *${p.name}* × ${q} — ${money(unit*q, primary)}`);
+    itemLines.push(`• *${p.name}* × ${q} — ${money(unit*q, primary)}`);
   }
-  lines.push("");
-  lines.push("السعر النهائي الإجمالي:");
-  if(t.TRY>0) lines.push(`• التركي: *${money(t.TRY,"TRY")}*`);
-  if(t.SYP>0) lines.push(`• السوري: *${money(t.SYP,"SYP")}*`);
-  if(t.USD>0) lines.push(`• الدولار: *${money(t.USD,"USD")}*`);
-  if(notes){ lines.push(""); lines.push(`📝 ملاحظة: ${notes}`); }
-  lines.push("");
-  lines.push("شكراً لكم 🌿");
-  window.open("https://wa.me/"+SETTINGS.whatsapp+"?text="+encodeURIComponent(lines.join("\n").trim()),"_blank");
+  const totalLines = [];
+  if(t.TRY>0) totalLines.push(`• التركي: *${money(t.TRY,"TRY")}*`);
+  if(t.SYP>0) totalLines.push(`• السوري: *${money(t.SYP,"SYP")}*`);
+  if(t.USD>0) totalLines.push(`• الدولار: *${money(t.USD,"USD")}*`);
+  const notesLine = (notes && notes.trim()) ? `📝 ملاحظة: ${notes.trim()}` : "";
+  const template = SETTINGS.msgTemplate || DEFAULT_MSG_TEMPLATE;
+  return template
+    .replace(/{items}/g, itemLines.join("\n"))
+    .replace(/{totals}/g, totalLines.join("\n"))
+    .replace(/{notes}/g, notesLine)
+    .replace(/{store}/g, SETTINGS.storeName || "")
+    // تنظيف أسطر فارغة متتالية إذا لم توجد ملاحظة
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function openWhatsappAll(text){
+  const nums = whatsappNumbers();
+  if(!nums.length) return false;
+  const encoded = encodeURIComponent(text);
+  // فتح رسالة لكل رقم
+  nums.forEach((num, i)=>{
+    const url = `https://wa.me/${num}?text=${encoded}`;
+    if(i === 0) window.open(url, "_blank");
+    else setTimeout(()=>window.open(url, "_blank"), 300*i);
+  });
+  if(nums.length > 1) toast(`تم فتح ${nums.length} رسائل واتساب`, "success");
+  return true;
+}
+
+function checkout(){
+  const notes=(document.getElementById("cNotes").value||"").trim();
+  const err=document.getElementById("cErr");
+  if(!whatsappNumbers().length){ err.textContent="لم يتم ضبط رقم واتساب المتجر"; return; }
+  const ids = Object.keys(cart).filter(id => byId(+id));
+  if(!ids.length){ err.textContent="السلة فارغة"; return; }
+  const msg = buildOrderMessage(notes);
+  if(!msg){ err.textContent="تعذّر إنشاء الرسالة"; return; }
+  openWhatsappAll(msg);
 }
 
 let toastTimer=null;
@@ -712,7 +756,8 @@ function toast(msg, type){
 function renderFooter(){
   const items=[];
   if(SETTINGS.email) items.push(`<a class="fitem" href="mailto:${SETTINGS.email}">✉️ ${SETTINGS.email}</a>`);
-  if(SETTINGS.whatsapp) items.push(`<a class="fitem" target="_blank" href="https://wa.me/${SETTINGS.whatsapp}"><span dir="ltr">✆ +${SETTINGS.whatsapp}</span></a>`);
+  const wnums = whatsappNumbers();
+  if(wnums.length) items.push(`<a class="fitem" target="_blank" href="https://wa.me/${wnums[0]}"><span dir="ltr">✆ +${wnums[0]}</span></a>`);
   if(SETTINGS.instagram) items.push(`<a class="fitem" target="_blank" href="https://instagram.com/${SETTINGS.instagram}">◎ @${SETTINGS.instagram}</a>`);
   document.getElementById("foot").innerHTML=`
     <div class="fitems">${items.join("")}</div>

@@ -305,19 +305,30 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
         </div>
       </div>
       <div class="card">
-        <h3>📞 معلومات التواصل</h3>
+        <h3>📞 أرقام الواتساب</h3>
+        <div class="hint" style="margin-bottom:8px">يمكنك إضافة أكثر من رقم. عند الطلب، ستُفتح رسالة واتساب لكل رقم دفعة واحدة.</div>
+        <div id="whatsappList"></div>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="addWhatsapp()">+ إضافة رقم آخر</button>
+      </div>
+      <div class="card">
+        <h3>💬 قالب رسالة الطلب</h3>
+        <div class="hint" style="margin-bottom:8px">يمكنك تخصيص الرسالة. الرموز المتاحة:
+          <code>{items}</code> = قائمة المنتجات · 
+          <code>{totals}</code> = الإجمالي بالعملات · 
+          <code>{notes}</code> = ملاحظة الزبون · 
+          <code>{store}</code> = اسم المتجر
+        </div>
+        <label class="label">القالب</label>
+        <textarea id="setMsgTemplate" class="field" rows="10" style="font-family:monospace;font-size:13px"></textarea>
+        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="resetMsgTemplate()">ترجع للقالب الافتراضي</button>
+      </div>
+      <div class="card">
+        <h3>🔗 حسابات أخرى</h3>
         <div class="row cols-2">
-          <div>
-            <label class="label">رقم واتساب (دولي بدون +)</label>
-            <input id="setWhatsapp" class="field" dir="ltr" placeholder="905xxxxxxxxx">
-            <div class="hint">مثال: سوريا 963xxxxxxxxx · تركيا 905xxxxxxxxx</div>
-          </div>
           <div>
             <label class="label">حساب إنستغرام (بدون @)</label>
             <input id="setInstagram" class="field" dir="ltr" placeholder="campuskart">
           </div>
-        </div>
-        <div class="row" style="margin-top:10px">
           <div><label class="label">البريد الإلكتروني</label><input id="setEmail" class="field" dir="ltr" placeholder="store@example.com"></div>
         </div>
       </div>
@@ -446,6 +457,15 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
         <button type="button" class="btn btn-ghost" onclick="addProductImage()">+ إضافة</button>
       </div>
     </details>
+    <div class="card" style="background:rgba(240,165,0,.08);border-color:#f0a500;padding:12px;margin-top:14px">
+      <h3 style="margin-bottom:6px;font-size:14px;color:#a4812f">⚡ تطبيق على جميع المنتجات</h3>
+      <div class="hint" style="margin-bottom:10px">يطبّق الخيار المحدد من هذا المنتج على كل منتجات المتجر (دون الحاجة لفتح كل منتج وحده).</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn btn-ghost btn-sm" onclick="applyFieldToAll('showCurrencies')">🔄 تطبيق إظهار/إخفاء العملات</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="applyFieldToAll('availability')">🔄 تطبيق الحالة</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick="applyFieldToAll('category')">🔄 تطبيق القسم</button>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeProductModal()">إلغاء</button>
       <button class="btn btn-gold" onclick="saveProduct()">حفظ المنتج</button>
@@ -726,6 +746,40 @@ function openProductModal(id){
 }
 function closeProductModal(){ $("modalProduct").classList.remove("open"); }
 
+// تطبيق خاصية من النموذج الحالي على جميع المنتجات
+function applyFieldToAll(field){
+  const labels = {
+    showCurrencies: "إظهار/إخفاء العملات",
+    availability: "الحالة",
+    category: "القسم"
+  };
+  let value;
+  if(field === "showCurrencies"){
+    value = {
+      USD: $("mpShowUSD").checked,
+      TRY: $("mpShowTRY").checked,
+      SYP: $("mpShowSYP").checked
+    };
+  } else if(field === "availability"){
+    value = $("mpAvail").value;
+  } else if(field === "category"){
+    value = $("mpCategory").value;
+    if(!value){ toast("اختر قسماً أولاً","error"); return; }
+  }
+  const count = DATA.products.length;
+  if(!count){ toast("لا توجد منتجات","error"); return; }
+  if(!confirm(`سيتم تطبيق "${labels[field]}" على ${count} منتج. متابعة؟`)) return;
+  DATA.products.forEach(p=>{
+    if(field === "showCurrencies"){
+      p.showCurrencies = { USD: value.USD, TRY: value.TRY, SYP: value.SYP };
+    } else {
+      p[field] = value;
+    }
+  });
+  renderProducts(); updateDirty();
+  toast(`✓ طُبّق على ${count} منتج`,"success");
+}
+
 function renderProductImages(){
   const wrap=$("mpImagesList"); wrap.innerHTML="";
   mpImages.forEach((src,i)=>{
@@ -943,7 +997,9 @@ function applyRatesToAll(){
   toast(`✓ تم تحديث أسعار ${updated} منتج — اضغط حفظ للنشر`,"success");
 }
 
-function parsePrice(input){
+// إذا currency === "SYP" → جبر إزالة الفواصل والفواصل العشرية (رقم صحيح فقط)
+// خلاف ذلك → يقبل الفواصل (للدولار والتركي وتحويلاتهما إلى أي عملة أخرى)
+function parsePrice(input, currency){
   if(input == null) return 0;
   let s = String(input).trim();
   if(!s) return 0;
@@ -952,11 +1008,19 @@ function parsePrice(input){
   // توحيد الفواصل العربية
   s = s.replace(/[٫٬]/g, ",").replace(/[^\d.,\-]/g, "");
   if(!s) return 0;
+
+  // الليرة السورية: احذف جميع الفواصل والنقاط (رقم صحيح)
+  if(currency === "SYP"){
+    s = s.replace(/[.,]/g, "");
+    const n = parseInt(s, 10);
+    return isFinite(n) && n >= 0 ? n : 0;
+  }
+
+  // الدولار والتركي: يقبلان الفواصل العشرية وفواصل الآلاف
   const lastDot = s.lastIndexOf(".");
   const lastCom = s.lastIndexOf(",");
   let decSep = "";
   if(lastDot !== -1 && lastCom !== -1){
-    // إذا وجد الإثنان → الأخير هو الفاصل العشري
     decSep = (lastDot > lastCom) ? "." : ",";
   }
   else if(lastDot !== -1 || lastCom !== -1){
@@ -964,11 +1028,8 @@ function parsePrice(input){
     const idx = (lastDot !== -1) ? lastDot : lastCom;
     const count = (s.match(new RegExp("\\" + sep, "g")) || []).length;
     const after = s.length - idx - 1;
-    // فاصلان أو أكثر → فواصل آلاف (ليس عشريًا)
     if(count > 1) decSep = "";
-    // فاصل واحد يتبعه 3 أرقام تمامًا وليس في أول الرقم → فاصل آلاف (مثل 12,000)
     else if(after === 3 && idx > 0) decSep = "";
-    // خلاف ذلك (1.5، 0.75، 1,5، 100.25) → فاصل عشري
     else decSep = sep;
   }
   if(decSep === "."){ s = s.replace(/,/g, ""); }
@@ -981,7 +1042,7 @@ function parsePrice(input){
 function saveProduct(){
   const name=$("mpName").value.trim();
   const category=$("mpCategory").value;
-  const sUSD=parsePrice($("mpPriceUSD").value), sTRY=parsePrice($("mpPriceTRY").value), sSYP=parsePrice($("mpPriceSYP").value);
+  const sUSD=parsePrice($("mpPriceUSD").value,"USD"), sTRY=parsePrice($("mpPriceTRY").value,"TRY"), sSYP=parsePrice($("mpPriceSYP").value,"SYP");
   if(!name){ toast("اسم المنتج مطلوب","error"); return; }
   if(!category){ toast("اختر القسم","error"); return; }
   if(!sUSD&&!sTRY&&!sSYP){ toast("أدخل سعراً واحداً على الأقل","error"); return; }
@@ -1185,21 +1246,84 @@ function moveBanner(idx, dir){
   renderBanners(); updateDirty();
 }
 
+const DEFAULT_MSG_TEMPLATE = `السلام عليكم
+أريد شراء هذه الأشياء:
+
+{items}
+
+السعر النهائي الإجمالي:
+{totals}
+
+{notes}
+
+شكراً لكم 🌿`;
+
 function renderSettings(){
   const s=DATA.settings;
   $("setStoreName").value=s.storeName||"";
   $("setDescription").value=s.description||"";
   $("setBannerInterval").value=Math.max(2, parseInt(s.bannerIntervalSec,10) || 7);
   $("setDelivery").value=s.deliveryNote||"";
-  $("setWhatsapp").value=s.whatsapp||"";
   $("setInstagram").value=s.instagram||"";
   $("setEmail").value=s.email||"";
   $("setBannersEnabled").checked = s.bannersEnabled !== false;
+  $("setMsgTemplate").value = s.msgTemplate || DEFAULT_MSG_TEMPLATE;
+  renderWhatsappList();
+}
+
+function ensureWhatsappList(){
+  const s = DATA.settings;
+  if(!Array.isArray(s.whatsapps) || !s.whatsapps.length){
+    // ترحيل من الحقل القديم whatsapp إن وجد
+    s.whatsapps = s.whatsapp ? [s.whatsapp] : [""];
+  }
+  return s.whatsapps;
+}
+
+function renderWhatsappList(){
+  const list = ensureWhatsappList();
+  const wrap = $("whatsappList");
+  wrap.innerHTML = list.map((num, i) => `
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+      <input type="text" class="field" dir="ltr" placeholder="905xxxxxxxxx" value="${num||""}"
+        oninput="onWhatsappInput(${i}, this.value)">
+      ${list.length > 1 ? `<button type="button" class="btn btn-danger btn-sm" onclick="removeWhatsapp(${i})">🗑</button>` : ""}
+    </div>
+  `).join("");
+}
+
+function onWhatsappInput(i, val){
+  ensureWhatsappList()[i] = String(val || "").trim();
+  // تحديث الحقل القديم للتوافق (الرقم الأول فقط)
+  DATA.settings.whatsapp = ensureWhatsappList()[0] || "";
+  updateDirty();
+}
+
+function addWhatsapp(){
+  ensureWhatsappList().push("");
+  renderWhatsappList();
+  updateDirty();
+}
+
+function removeWhatsapp(i){
+  const list = ensureWhatsappList();
+  list.splice(i, 1);
+  if(!list.length) list.push("");
+  DATA.settings.whatsapp = list[0] || "";
+  renderWhatsappList();
+  updateDirty();
+}
+
+function resetMsgTemplate(){
+  if(!confirm("إعادة القالب للافتراضي؟")) return;
+  DATA.settings.msgTemplate = DEFAULT_MSG_TEMPLATE;
+  $("setMsgTemplate").value = DEFAULT_MSG_TEMPLATE;
+  updateDirty();
 }
 
 function bindSettings(){
   const map={setStoreName:"storeName",setDescription:"description",setDelivery:"deliveryNote",
-             setWhatsapp:"whatsapp",setInstagram:"instagram",setEmail:"email"};
+             setInstagram:"instagram",setEmail:"email"};
   Object.entries(map).forEach(([id,key])=>{
     $(id).addEventListener("input", e=>{
       DATA.settings[key] = e.target.value.trim();
@@ -1214,6 +1338,10 @@ function bindSettings(){
   });
   $("setBannersEnabled").addEventListener("change", e=>{
     DATA.settings.bannersEnabled = e.target.checked;
+    updateDirty();
+  });
+  $("setMsgTemplate").addEventListener("input", e=>{
+    DATA.settings.msgTemplate = e.target.value;
     updateDirty();
   });
 }
