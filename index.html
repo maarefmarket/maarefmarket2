@@ -143,6 +143,10 @@ header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 9
 .block h3{font-size:15.5px;margin-bottom:6px;color:var(--forest)}
 .block .body-txt{color:var(--fg);white-space:pre-line;line-height:1.85;font-size:14px}
 .notes{background:var(--elevated);border-right:3px solid var(--gold);border-radius:10px;padding:11px 13px;color:var(--fg);font-size:13.5px}
+.variants-bar{display:flex;gap:6px;flex-wrap:wrap}
+.var-chip{padding:7px 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--fg);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.var-chip:hover{border-color:var(--gold)}
+.var-chip.active{background:var(--forest);color:#fff;border-color:var(--forest);cursor:default}
 .qty{display:inline-flex;align-items:center;border:1px solid var(--line);border-radius:10px}
 .qty button{width:38px;height:40px;background:none;border:none;color:var(--fg);font-size:18px;cursor:pointer}
 .qty button:disabled{opacity:.35;cursor:not-allowed}
@@ -251,23 +255,25 @@ let PRODUCTS = [];
 const HOUR = 3600000;
 
 async function loadData(){
-  try{
-    const res = await fetch("/api/data", { cache: "no-store" });
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    const data = await res.json();
-    SETTINGS = data.settings || {};
-    SETTINGS.bannerIntervalSec = Math.max(2, parseInt(SETTINGS.bannerIntervalSec,10) || 7);
-    BANNERS = data.banners || [];
-    CATEGORIES = data.categories || [];
-    PRODUCTS = data.products || [];
-    return true;
-  }catch(e){
-    console.error("loadData", e);
-    document.getElementById("app").innerHTML =
-      `<div class="empty"><h2 class="section-title" style="justify-content:center">تعذّر تحميل المتجر</h2>
-      <p style="margin-top:8px">حدّث الصفحة بعد قليل.</p></div>`;
-    return false;
+  // المحاولة 1: API (Netlify) — المحاولة 2: الملف الافتراضي (يعمل محلياً أيضاً)
+  for(const url of ["/api/data", "data-default.json", "./data-default.json"]){
+    try{
+      const res = await fetch(url, { cache: "no-store" });
+      if(!res.ok) continue;
+      const data = await res.json();
+      SETTINGS = data.settings || {};
+      SETTINGS.bannerIntervalSec = Math.max(2, parseInt(SETTINGS.bannerIntervalSec,10) || 7);
+      BANNERS = data.banners || [];
+      CATEGORIES = data.categories || [];
+      PRODUCTS = data.products || [];
+      return true;
+    }catch(e){ console.warn("loadData fallback", url, e); }
   }
+  const appEl = document.getElementById("app");
+  if(appEl) appEl.innerHTML =
+    `<div class="empty"><h2 class="section-title" style="justify-content:center">تعذّر تحميل المتجر</h2>
+    <p style="margin-top:8px">حدّث الصفحة بعد قليل.</p></div>`;
+  return false;
 }
 
 /* ============================================================
@@ -460,7 +466,8 @@ function getList(mode, slug){
   if(mode==="category") list=list.filter(p=>p.category===slug);
   if(mode==="new") list=list.filter(isNew);
   if(state.q){ const q=state.q.trim().toLowerCase();
-    list=list.filter(p=>p.name.toLowerCase().includes(q)||(p.description||"").toLowerCase().includes(q)); }
+    // البحث يطابق: الاسم، الوصف، واسم المجموعة (يُظهر كل أنواع المنتج المجموعة معاً)
+    list=list.filter(p=>p.name.toLowerCase().includes(q)||(p.description||"").toLowerCase().includes(q)||(p.group||"").toLowerCase().includes(q)); }
   if(state.sort==="price_asc") list.sort((a,b)=>(a.prices[PRIMARY]||0)-(b.prices[PRIMARY]||0));
   else if(state.sort==="price_desc") list.sort((a,b)=>(b.prices[PRIMARY]||0)-(a.prices[PRIMARY]||0));
   else if(state.sort==="views") list.sort((a,b)=>(b.views||0)-(a.views||0));
@@ -548,6 +555,25 @@ function renderListing(mode, slug){
 }
 
 let gImg=0;
+// أنواع المنتج: كل المنتجات التي تشارك نفس اسم المجموعة
+function groupVariants(p){
+  if(!p || !p.group) return [];
+  return PRODUCTS.filter(x=>x.group===p.group && x.id!==p.id);
+}
+function variantsHTML(p){
+  const vars = groupVariants(p);
+  if(!vars.length) return "";
+  const chips = [`<button class="var-chip active" disabled>${p.name}</button>`]
+    .concat(vars.map(v=>`<button class="var-chip" onclick="go('product/${v.id}')">${v.name}</button>`)).join("");
+  return `<div class="block"><h3>الأنواع المتاحة (${vars.length+1})</h3><div class="variants-bar">${chips}</div></div>`;
+}
+function similarHTML(p){
+  // منتجات مشابهة: نفس القسم، باستثناء المنتج الحالي وأنواع مجموعته
+  const sims = PRODUCTS.filter(x=>x.id!==p.id && x.category===p.category && x.group!==p.group).slice(0,4);
+  if(!sims.length) return "";
+  return `<div style="margin:26px 0 10px"><h2 class="section-title">منتجات مشابهة</h2></div>
+    <div class="grid">${sims.map(cardHTML).join("")}</div>`;
+}
 function renderProduct(id){
   const p=byId(id);
   if(!p){ document.getElementById("app").innerHTML='<div class="empty">المنتج غير موجود.</div>'; return; }
@@ -587,8 +613,10 @@ function renderProduct(id){
         ${whatsappNumbers().length?`<div class="row">
           <button class="btn btn-wa" onclick="inquireWA(${p.id})" style="width:100%">استفسار عبر واتساب</button>
         </div>`:''}
+        ${variantsHTML(p)}
       </div>
-    </div>`;
+    </div>
+    ${similarHTML(p)}`;
   window.scrollTo(0,0);
 }
 let pQ=1;
@@ -788,16 +816,19 @@ function route(){
 }
 
 function initTheme(){
-  const saved=localStorage.getItem("ck_theme")||"light";
+  let saved="light";
+  try{ saved=localStorage.getItem("ck_theme")||"light"; }catch(e){}
   document.documentElement.setAttribute("data-theme",saved);
-  document.getElementById("themeBtn").textContent=saved==="dark"?"☀️":"🌙";
+  const btn=document.getElementById("themeBtn");
+  if(btn) btn.textContent=saved==="dark"?"☀️":"🌙";
 }
-document.getElementById("themeBtn").onclick=()=>{
+const _themeBtn=document.getElementById("themeBtn");
+if(_themeBtn) _themeBtn.onclick=()=>{
   const cur=document.documentElement.getAttribute("data-theme");
   const next=cur==="dark"?"light":"dark";
   document.documentElement.setAttribute("data-theme",next);
-  localStorage.setItem("ck_theme",next);
-  document.getElementById("themeBtn").textContent=next==="dark"?"☀️":"🌙";
+  try{ localStorage.setItem("ck_theme",next); }catch(e){}
+  _themeBtn.textContent=next==="dark"?"☀️":"🌙";
 };
 
 let _t;
@@ -818,6 +849,6 @@ document.getElementById("searchInput").addEventListener("input",e=>{
   route();
 })();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79"}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>

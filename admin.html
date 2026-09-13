@@ -385,6 +385,13 @@ kbd{background:var(--elevated);border:1px solid var(--line);border-radius:4px;pa
       <div><label class="label">اسم المنتج *</label><input id="mpName" class="field"></div>
       <div><label class="label">القسم *</label><select id="mpCategory" class="field"></select></div>
     </div>
+    <div class="row" style="margin-top:10px">
+      <div>
+        <label class="label">اسم المجموعة (اختياري)</label>
+        <input id="mpGroup" class="field" placeholder="مثال: كنزا كولا">
+        <div class="hint">إن شارك عدة منتجات نفس اسم المجموعة تظهر كأنواع لبعضها في صفحة المنتج، ويُظهرها البحث كلها معاً.</div>
+      </div>
+    </div>
     <div class="row cols-3" style="margin-top:10px">
       <div>
         <label class="label" style="display:flex;justify-content:space-between;align-items:center;gap:6px">
@@ -760,6 +767,7 @@ function openProductModal(id){
     $("modalProductTitle").textContent="تعديل المنتج";
     $("mpName").value=p.name||"";
     $("mpCategory").value=p.category||"";
+    $("mpGroup").value=p.group||"";
     $("mpPriceUSD").value=p.prices?.USD||"";
     $("mpPriceTRY").value=p.prices?.TRY||"";
     $("mpPriceSYP").value=p.prices?.SYP||"";
@@ -774,7 +782,7 @@ function openProductModal(id){
     mpImages = (p.images||[]).slice();
   } else {
     $("modalProductTitle").textContent="منتج جديد";
-    ["mpName","mpPriceUSD","mpPriceTRY","mpPriceSYP","mpViews","mpDesc","mpNotes","mpImgInput"].forEach(id=>$(id).value="");
+    ["mpName","mpGroup","mpPriceUSD","mpPriceTRY","mpPriceSYP","mpViews","mpDesc","mpNotes","mpImgInput"].forEach(id=>$(id).value="");
     $("mpShowUSD").checked = true;
     $("mpShowTRY").checked = true;
     $("mpShowSYP").checked = true;
@@ -1114,6 +1122,7 @@ function saveProduct(){
   const p = {
     id: editingProductId || (Math.max(0, ...DATA.products.map(x=>x.id))+1),
     name, category,
+    group: $("mpGroup").value.trim(),
     prices: {USD: sUSD||0, TRY: sTRY||0, SYP: sSYP||0},
     showCurrencies: {
       USD: $("mpShowUSD").checked,
@@ -1492,6 +1501,6 @@ function initAdminTheme(){
   }
 })();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79"}' crossorigin="anonymous"></script>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
