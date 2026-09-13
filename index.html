@@ -324,21 +324,49 @@ function pruneCart(){
 }
 function saveCart(){ sessionStorage.setItem("ck_cart", JSON.stringify(cart)); updateCartCount(); }
 function cartQty(){ return Object.values(cart).reduce((a,b)=>a+b,0); }
-function addToCart(id, qty){
-  qty=qty||1; const p=byId(id);
-  if(!p||p.availability==="out"){ toast("المنتج غير متوفر","err"); return; }
-  cart[id]=(cart[id]||0)+qty;
+// ==== دعم أنواع المنتج (Variants) ====
+// مفتاح السلة: "5" للمنتج الأساسي أو "5__v2" للنوع رقم 2
+function vKey(id, vi){ return (vi==null||vi<0) ? String(id) : id+"__v"+vi; }
+function resolveItem(key){
+  const s=String(key);
+  const m=s.match(/^(\d+)(?:__v(\d+))?$/);
+  if(!m) return null;
+  const p=byId(+m[1]); if(!p) return null;
+  const vi=(m[2]!=null)? +m[2] : -1;
+  const v=(vi>=0 && p.variants && p.variants[vi]) ? p.variants[vi] : null;
+  return {
+    p, vi, v,
+    prices: (v && v.prices) ? v.prices : p.prices,
+    availability: (v && v.availability) ? v.availability : p.availability,
+    name: v ? (p.name+" — "+(v.name||("نوع "+(vi+1)))) : p.name,
+    image: (v && v.image) ? v.image : ((p.images&&p.images[0])||""),
+    showCurrencies: (v && v.showCurrencies) ? v.showCurrencies : p.showCurrencies
+  };
+}
+function addToCart(id, qty, vi){
+  qty=qty||1;
+  const key=vKey(id, (vi==null)?-1:vi);
+  const it=resolveItem(key);
+  if(!it||it.availability==="out"){ toast("غير متوفر","err"); return; }
+  cart[key]=(cart[key]||0)+qty;
   saveCart(); toast("أُضيف إلى السلة");
 }
 function buyNowWA(id){
   const p=byId(id);
-  if(!p||p.availability==="out"){ toast("المنتج غير متوفر","err"); return; }
+  if(!p) return;
   if(!whatsappNumbers().length){ toast("لم يتم ضبط رقم واتساب","err"); return; }
-  // إضافة مؤقتة للسلة لبناء رسالة موحدة
-  const backup = Object.assign({}, cart);
-  cart = { [id]: 1 };
-  const msg = buildOrderMessage("");
-  cart = backup; saveCart();
+  let vi=-1;
+  if(p.variants && p.variants.length){
+    vi=p.variants.findIndex(v=>v.availability!=="out");
+    if(vi<0) vi=0;
+  }
+  const key=vKey(id,vi);
+  const it=resolveItem(key);
+  if(!it||it.availability==="out"){ toast("غير متوفر","err"); return; }
+  const backup=Object.assign({},cart);
+  cart={}; cart[key]=1;
+  const msg=buildOrderMessage("");
+  cart=backup; saveCart();
   if(msg) openWhatsappAll(msg);
 }
 function inquireWA(id){
@@ -367,18 +395,16 @@ function cardStep(id, d){
 }
 function cartTotals(){
   const t={SYP:0,USD:0,TRY:0};
-  // تتبّع أي عملة مرئية لواحد أو أكثر من منتجات السلة
   const anyVisible = {SYP:false, USD:false, TRY:false};
-  for(const id in cart){ const p=byId(+id); if(!p) continue;
-    const vis = visibleCurs(p);
+  for(const key in cart){ const it=resolveItem(key); if(!it) continue;
+    const vis = visibleCurs({prices:it.prices, showCurrencies:it.showCurrencies});
     for(const [c] of CUR){
-      if(vis.includes(c) && (p.prices[c]||0)>0){
-        t[c] += (p.prices[c]||0)*cart[id];
+      if(vis.includes(c) && (it.prices[c]||0)>0){
+        t[c] += (it.prices[c]||0)*cart[key];
         anyVisible[c] = true;
       }
     }
   }
-  // أما العملات غير المرئية في أي منتج → أرجعها إلى 0 لإخفائها في إجمالي السلة
   for(const c of Object.keys(t)) if(!anyVisible[c]) t[c] = 0;
   return t;
 }
@@ -466,8 +492,9 @@ function getList(mode, slug){
   if(mode==="category") list=list.filter(p=>p.category===slug);
   if(mode==="new") list=list.filter(isNew);
   if(state.q){ const q=state.q.trim().toLowerCase();
-    // البحث يطابق: الاسم، الوصف، واسم المجموعة (يُظهر كل أنواع المنتج المجموعة معاً)
-    list=list.filter(p=>p.name.toLowerCase().includes(q)||(p.description||"").toLowerCase().includes(q)||(p.group||"").toLowerCase().includes(q)); }
+    // البحث يطابق: الاسم، الوصف، المجموعة، وأسماء الأنواع الداخلية
+    list=list.filter(p=>p.name.toLowerCase().includes(q)||(p.description||"").toLowerCase().includes(q)||(p.group||"").toLowerCase().includes(q)
+      ||(Array.isArray(p.variants)&&p.variants.some(v=>(v.name||"").toLowerCase().includes(q)))); }
   if(state.sort==="price_asc") list.sort((a,b)=>(a.prices[PRIMARY]||0)-(b.prices[PRIMARY]||0));
   else if(state.sort==="price_desc") list.sort((a,b)=>(b.prices[PRIMARY]||0)-(a.prices[PRIMARY]||0));
   else if(state.sort==="views") list.sort((a,b)=>(b.views||0)-(a.views||0));
@@ -555,17 +582,11 @@ function renderListing(mode, slug){
 }
 
 let gImg=0;
+let curVariant=-1;
 // أنواع المنتج: كل المنتجات التي تشارك نفس اسم المجموعة
 function groupVariants(p){
   if(!p || !p.group) return [];
   return PRODUCTS.filter(x=>x.group===p.group && x.id!==p.id);
-}
-function variantsHTML(p){
-  const vars = groupVariants(p);
-  if(!vars.length) return "";
-  const chips = [`<button class="var-chip active" disabled>${p.name}</button>`]
-    .concat(vars.map(v=>`<button class="var-chip" onclick="go('product/${v.id}')">${v.name}</button>`)).join("");
-  return `<div class="block"><h3>الأنواع المتاحة (${vars.length+1})</h3><div class="variants-bar">${chips}</div></div>`;
 }
 function similarHTML(p){
   // منتجات مشابهة: نفس القسم، باستثناء المنتج الحالي وأنواع مجموعته
@@ -578,6 +599,10 @@ function renderProduct(id){
   const p=byId(id);
   if(!p){ document.getElementById("app").innerHTML='<div class="empty">المنتج غير موجود.</div>'; return; }
   gImg=0;
+  curVariant = (p.variants && p.variants.length) ? 0 : -1;
+  const varBlock = (p.variants && p.variants.length)
+    ? `<div class="block"><h3>اختر النوع</h3><div class="variants-bar" id="varBox">${p.variants.map((v,i)=>`<button type="button" class="var-chip${i===0?" active":""}" onclick="pickVariant(${i})">${(v.name||("نوع "+(i+1)))}</button>`).join("")}</div></div>`
+    : "";
   const offer=p.oldPrices && (p.oldPrices[PRIMARY]||0) > (p.prices[PRIMARY]||0);
   const imgs = p.images && p.images.length ? p.images : [""];
   const visP = visibleCurs(p);
@@ -599,8 +624,9 @@ function renderProduct(id){
       <div class="pinfo">
         <div class="cat" style="color:var(--gold);font-weight:600">${catName(p.category)}</div>
         <h1>${p.name}</h1>
-        <div><span class="tag ${p.availability}">${availText(p.availability)}</span></div>
-        <div class="prices">${pricesRows}</div>
+        <div><span class="tag ${p.availability}" id="pAvailTag">${availText(p.availability)}</span></div>
+        <div class="prices" id="pPricesBox">${pricesRows}</div>
+        ${varBlock}
         ${p.description?`<div class="block"><h3>الوصف</h3><div class="body-txt">${p.description}</div></div>`:''}
         ${p.notes?`<div class="block"><h3>ملاحظات</h3><div class="notes">${p.notes}</div></div>`:''}
         ${p.availability!=="out"?`
@@ -608,12 +634,11 @@ function renderProduct(id){
           <div style="flex:0 0 auto"><label class="label">الكمية</label>
             <div class="qty"><button onclick="pStep(-1)">−</button><span id="pQty">1</span><button onclick="pStep(1)">+</button></div>
           </div>
-          <button class="btn btn-gold" style="flex:1" onclick="addFromPage(${p.id})">أضف إلى السلة 🛒</button>
+          <button class="btn btn-gold" style="flex:1" id="pAddBtn" onclick="addFromPage(${p.id})">أضف إلى السلة 🛒</button>
         </div>`:'<button class="btn btn-ghost" disabled>غير متوفر حالياً</button>'}
         ${whatsappNumbers().length?`<div class="row">
           <button class="btn btn-wa" onclick="inquireWA(${p.id})" style="width:100%">استفسار عبر واتساب</button>
         </div>`:''}
-        ${variantsHTML(p)}
       </div>
     </div>
     ${similarHTML(p)}`;
@@ -627,7 +652,31 @@ function gSet(i){
   document.querySelectorAll(".thumbs img").forEach((t,idx)=>t.classList.toggle("active",idx===i));
 }
 function gStep(d){ const p=byId(curProductId()); if(!p) return; gImg=(gImg+d+p.images.length)%p.images.length; gSet(gImg); }
-function addFromPage(id){ addToCart(id,pQ); pQ=1; }
+function addFromPage(id){ addToCart(id,pQ, curVariant); pQ=1; }
+function variantPriceRows(p, vi){
+  const v=(vi>=0 && p.variants) ? p.variants[vi] : null;
+  const prices=(v && v.prices) ? v.prices : p.prices;
+  const sc=(v && v.showCurrencies) ? v.showCurrencies : p.showCurrencies;
+  const vis=visibleCurs({prices, showCurrencies:sc});
+  return CUR.filter(([c])=>vis.includes(c)).map(([c])=>`
+    <div class="pr"><span class="cur">${({SYP:'الليرة السورية',USD:'الدولار الأمريكي',TRY:'الليرة التركية'})[c]}</span>
+    <span class="val">${money(prices[c],c)}</span></div>`).join("");
+}
+function pickVariant(vi){
+  const p=byId(curProductId()); if(!p||!p.variants) return;
+  curVariant=vi;
+  const v=p.variants[vi];
+  const box=document.getElementById("pPricesBox");
+  if(box) box.innerHTML=variantPriceRows(p,vi);
+  const avail=(v && v.availability) ? v.availability : p.availability;
+  const tag=document.getElementById("pAvailTag");
+  if(tag){ tag.className="tag "+avail; tag.textContent=availText(avail); }
+  const gm=document.getElementById("gMain");
+  if(gm && v && v.image) gm.src=v.image;
+  document.querySelectorAll("#varBox .var-chip").forEach((c,i)=>c.classList.toggle("active", i===vi));
+  const addBtn=document.getElementById("pAddBtn");
+  if(addBtn){ addBtn.disabled=(avail==="out"); }
+}
 function curProductId(){ const m=location.hash.match(/product\/(\d+)/); return m?+m[1]:null; }
 
 function renderCart(){
@@ -641,34 +690,36 @@ function renderCart(){
     return;
   }
   const t=cartTotals();
-  const rows=ids.map(id=>{ 
-    const p=byId(+id); const q=cart[id];
+  const rows=ids.map(key=>{
+    const q=cart[key];
+    const it=resolveItem(key);
+    const p=it?it.p:null;
     // إذا لم يُحمّل المنتج بعد (مثلاً فشل اتّصال مؤقت) → أظهر مكاناً محجوزاً للمنتج دون حذفه من السلة
     if(!p){
       return `<div class="cart-item">
         <div style="width:68px;height:68px;background:var(--elevated);border-radius:10px;display:grid;place-items:center;font-size:22px">⏳</div>
         <div class="ci-body">
-          <div class="ci-name">منتج #${id}</div>
+          <div class="ci-name">منتج #${key}</div>
           <div class="ci-price" style="color:var(--muted);font-size:12px">لم يُحمّل بعد… حدّث الصفحة</div>
           <div class="qty" style="margin-top:5px"><button disabled>−</button><span>${q}</span><button disabled>+</button></div>
         </div>
         <div style="text-align:end">
-          <button class="link-remove" onclick="cartRemove(${id})">حذف</button>
+          <button class="link-remove" onclick="cartRemove('${key}')">حذف</button>
         </div></div>`;
     }
-    const img = (p.images&&p.images[0])||"";
-    const visCart = visibleCurs(p);
+    const img = it.image||"";
+    const visCart = visibleCurs({prices:it.prices, showCurrencies:it.showCurrencies});
     const primCart = visCart.includes(PRIMARY) ? PRIMARY : (visCart[0] || PRIMARY);
     return `<div class="cart-item">
       ${img?`<img src="${img}" alt="${p.name}" onclick="go('product/${p.id}')" style="cursor:pointer">`:'<div style="width:68px;height:68px;background:var(--elevated);border-radius:10px"></div>'}
       <div class="ci-body">
-        <div class="ci-name">${p.name}</div>
-        <div class="ci-price">${money(p.prices[primCart],primCart)} · للقطعة</div>
-        <div class="qty" style="margin-top:5px"><button onclick="cartStep(${p.id},-1)">−</button><span>${q}</span><button onclick="cartStep(${p.id},1)">+</button></div>
+        <div class="ci-name">${it.name}</div>
+        <div class="ci-price">${money(it.prices[primCart],primCart)} · للقطعة</div>
+        <div class="qty" style="margin-top:5px"><button onclick="cartStep('${key}',-1)">−</button><span>${q}</span><button onclick="cartStep('${key}',1)">+</button></div>
       </div>
       <div style="text-align:end">
-        <div style="font-weight:700;color:var(--forest)">${money((p.prices[primCart]||0)*q,primCart)}</div>
-        <button class="link-remove" onclick="cartRemove(${p.id})">حذف</button>
+        <div style="font-weight:700;color:var(--forest)">${money((it.prices[primCart]||0)*q,primCart)}</div>
+        <button class="link-remove" onclick="cartRemove('${key}')">حذف</button>
       </div></div>`;
   }).join("");
   document.getElementById("app").innerHTML=`
@@ -715,16 +766,16 @@ const DEFAULT_MSG_TEMPLATE = `السلام عليكم
 شكراً لكم 🌿`;
 
 function buildOrderMessage(notes){
-  const ids = Object.keys(cart).filter(id => byId(+id));
+  const ids = Object.keys(cart).filter(k => resolveItem(k));
   if(!ids.length) return "";
   const t = cartTotals();
   const itemLines = [];
-  for(const id of ids){
-    const p=byId(+id); const q=cart[id];
-    const vis = visibleCurs(p);
+  for(const key of ids){
+    const it=resolveItem(key); const q=cart[key];
+    const vis=visibleCurs({prices:it.prices, showCurrencies:it.showCurrencies});
     const primary = vis.includes("USD") ? "USD" : (vis[0] || "USD");
-    const unit = p.prices[primary] || 0;
-    itemLines.push(`• *${p.name}* × ${q} — ${money(unit*q, primary)}`);
+    const unit = it.prices[primary] || 0;
+    itemLines.push(`• *${it.name}* × ${q} — ${money(unit*q, primary)}`);
   }
   const totalLines = [];
   if(t.TRY>0) totalLines.push(`• التركي: *${money(t.TRY,"TRY")}*`);
@@ -769,7 +820,7 @@ function checkout(){
   const notes=(document.getElementById("cNotes").value||"").trim();
   const err=document.getElementById("cErr");
   if(!whatsappNumbers().length){ err.textContent="لم يتم ضبط رقم واتساب المتجر"; return; }
-  const ids = Object.keys(cart).filter(id => byId(+id));
+  const ids = Object.keys(cart).filter(k => resolveItem(k));
   if(!ids.length){ err.textContent="السلة فارغة"; return; }
   const msg = buildOrderMessage(notes);
   if(!msg){ err.textContent="تعذّر إنشاء الرسالة"; return; }
@@ -849,6 +900,5 @@ document.getElementById("searchInput").addEventListener("input",e=>{
   route();
 })();
 </script>
-<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/v31edd6df95cf4e85bb4c19e7a9bdbcba1788362987495" integrity="sha512-iIg7k2xntmwu6/uSb5tpc/hySgZc4eoL31yB29W6tJFo2akwjPWcEqnCEdJvGexCL0KEQwVYv5BlowfhVz26hg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","spa":2}' crossorigin="anonymous"></script>
 </body>
 </html>
