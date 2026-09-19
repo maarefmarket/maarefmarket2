@@ -1,9 +1,13 @@
 {
   "settings": {
     "storeName": "CampusKart",
-    "description": "متجر الجامعة — كل ما تحتاجه في مكان واحد",
+    "description": "متجر جامعة المعارف — كل ما تحتاجه في مكان واحد",
     "email": "",
-    "whatsapp": "905000000000",
+    "whatsapp": "",
+    "whatsapps": [],
+    "bannersEnabled": true,
+    "baseCurrency": "USD",
+    "rates": { "USD_TRY": 33, "USD_SYP": 14000 },
     "instagram": "",
     "deliveryNote": "توصيل داخل الحرم الجامعي · الدفع عند الاستلام",
     "bannerIntervalSec": 7
@@ -11,7 +15,7 @@
   "banners": [
     {
       "image": "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?auto=format&fit=crop&w=1200&q=70",
-      "eyebrow": "CampusKart",
+      "eyebrow": "CampusKart — جامعة المعارف",
       "title": "كل ما تحتاجه في مكان واحد",
       "link": ""
     },
@@ -66,6 +70,27 @@
       "availability": "in", "created": 1755000400000, "views": 0,
       "description": "كوكاكولا الأصلية.", "notes": "",
       "images": ["https://images.unsplash.com/photo-1554866585-cd94860890b7?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 18, "name": "كنزا كولا 330 مل", "category": "drinks", "group": "كنزا كولا",
+      "prices": { "SYP": 7000, "USD": 0.50, "TRY": 16.5 },
+      "availability": "in", "created": 1755002000000, "views": 0,
+      "description": "علبة كنزا كولا كلاسيك.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1622483767028-3f66f32aef97?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 19, "name": "كنزا كولا 1 لتر", "category": "drinks", "group": "كنزا كولا",
+      "prices": { "SYP": 14000, "USD": 1.00, "TRY": 33 },
+      "availability": "in", "created": 1755002100000, "views": 0,
+      "description": "قنينة كنزا كولا عائلية.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1581636625402-29b2a704ef13?auto=format&fit=crop&w=800&q=70"]
+    },
+    {
+      "id": 20, "name": "كنزا كولا دايت", "category": "drinks", "group": "كنزا كولا",
+      "prices": { "SYP": 7000, "USD": 0.50, "TRY": 16.5 },
+      "availability": "limited", "created": 1755002200000, "views": 0,
+      "description": "كنزا كولا بدون سكر.", "notes": "",
+      "images": ["https://images.unsplash.com/photo-1567103472667-6898f3a79cf2?auto=format&fit=crop&w=800&q=70"]
     },
     {
       "id": 6, "name": "ماء 500 مل", "category": "drinks",

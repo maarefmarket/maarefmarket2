@@ -1,191 +1,149 @@
 /**
  * Netlify Function: /api/data
- * GET  => يُرجع بيانات المتجر
- * PUT  => يحفظ البيانات (يتطلب Authorization: Bearer <ADMIN_PASSWORD>)
+ * GET  → بيانات المتجر (عامة، مع ETag)
+ * PUT  → حفظ البيانات (يتطلب توكن جلسة صالح + Same-Origin)
+ *        ترويسة X-Base-Version تمنع الكتابة فوق تعديل أحدث من جهاز آخر (Optimistic locking)
+ *        ترويسة X-Force: 1 لتجاوز التعارض عمداً
  */
 
 import { getStore } from "@netlify/blobs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { json, noContent, corsHeaders, requireAuth, clientIp, rateLimit } from "../lib/auth.js";
+import { sanitizeStore, hasValidShape, LIMITS } from "../lib/validate.js";
 
 const STORE_NAME = "campuskart-data";
 const KEY = "store.json";
 const BACKUP_KEY = "store.backup.latest.json";
 const PREV_BACKUP_KEY = "store.backup.previous.json";
+const HISTORY_PREFIX = "history/";
+const HISTORY_KEEP = 20;
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  "Content-Type": "application/json; charset=utf-8",
-  "Cache-Control": "no-store",
+const FALLBACK = {
+  settings: {
+    storeName: "CampusKart", description: "متجر الجامعة", email: "", whatsapp: "", whatsapps: [],
+    instagram: "", deliveryNote: "توصيل داخل الحرم الجامعي.", bannerIntervalSec: 7,
+  },
+  banners: [], categories: [], products: [],
 };
 
 async function loadDefaults() {
-  try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const candidates = [
-      join(here, "..", "..", "..", "data-default.json"),
-      join(here, "..", "..", "data-default.json"),
-      join(process.cwd(), "data-default.json"),
-    ];
-    for (const p of candidates) {
-      try {
-        const txt = await readFile(p, "utf-8");
-        return JSON.parse(txt);
-      } catch (_) {}
-    }
-  } catch (e) {
-    console.error("loadDefaults error", e);
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    join(here, "..", "..", "data-default.json"),
+    join(here, "..", "..", "..", "data-default.json"),
+    join(process.cwd(), "data-default.json"),
+  ];
+  for (const p of candidates) {
+    try { return JSON.parse(await readFile(p, "utf-8")); } catch {}
   }
-  return {
-    settings: {
-      storeName: "CampusKart",
-      description: "متجر الجامعة",
-      email: "",
-      whatsapp: "",
-      instagram: "",
-      deliveryNote: "توصيل داخل الحرم الجامعي.",
-      bannerIntervalSec: 7
-    },
-    banners: [],
-    categories: [
-      { slug: "chips", name: "شيبسات" },
-      { slug: "drinks", name: "مشروبات" }
-    ],
-    products: []
-  };
+  return FALLBACK;
 }
 
-function normalizeData(data) {
-  const fallback = {
-    settings: {
-      storeName: "CampusKart",
-      description: "متجر الجامعة",
-      email: "",
-      whatsapp: "",
-      instagram: "",
-      deliveryNote: "توصيل داخل الحرم الجامعي.",
-      bannerIntervalSec: 7,
-    },
-    banners: [],
-    categories: [],
-    products: [],
-  };
-  const safe = data && typeof data === "object" ? data : {};
-  const settings = { ...fallback.settings, ...(safe.settings || {}) };
-  settings.bannerIntervalSec = Math.max(2, parseInt(settings.bannerIntervalSec, 10) || 7);
-  return {
-    settings,
-    banners: Array.isArray(safe.banners) ? safe.banners : fallback.banners,
-    categories: Array.isArray(safe.categories) ? safe.categories : fallback.categories,
-    products: Array.isArray(safe.products) ? safe.products : fallback.products,
-  };
+function withVersion(data, version) {
+  return { ...data, _version: version };
 }
 
-export default async (req) => {
+export default async (req, context) => {
   const method = req.method.toUpperCase();
-
-  if (method === "OPTIONS") {
-    return new Response("", { status: 204, headers: CORS_HEADERS });
-  }
+  const cors = corsHeaders(req, "GET, PUT, OPTIONS");
+  if (method === "OPTIONS") return noContent(cors);
 
   const store = getStore({ name: STORE_NAME, consistency: "strong" });
 
+  /* ---------------------------- GET ---------------------------- */
   if (method === "GET") {
     try {
-      let data = await store.get(KEY, { type: "json" });
+      let rec = await store.getWithMetadata(KEY, { type: "json" }).catch(() => null);
+      let data = rec?.data || null;
+      let version = Number(rec?.metadata?.version) || 0;
+
       if (!data) {
-        const backup = await store.get(BACKUP_KEY, { type: "json" });
-        if (backup) {
-          data = normalizeData(backup);
-          await store.setJSON(KEY, data);
-        } else {
-          data = normalizeData(await loadDefaults());
-          await store.setJSON(KEY, data);
-          await store.setJSON(BACKUP_KEY, data);
-        }
+        const backup = await store.get(BACKUP_KEY, { type: "json" }).catch(() => null);
+        data = sanitizeStore(backup || (await loadDefaults()));
+        version = Date.now();
+        await store.setJSON(KEY, data, { metadata: { version: String(version) } });
+        await store.setJSON(BACKUP_KEY, data);
       } else {
-        data = normalizeData(data);
+        data = sanitizeStore(data);
       }
-      return new Response(JSON.stringify(data), { status: 200, headers: CORS_HEADERS });
+
+      const etag = `"${version}"`;
+      if (req.headers.get("if-none-match") === etag) {
+        return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": "no-cache", ...cors } });
+      }
+      return json(withVersion(data, version), 200, { ...cors, ETag: etag, "Cache-Control": "no-cache" });
     } catch (e) {
       console.error("GET error", e);
-      return new Response(
-        JSON.stringify({ error: "تعذّر قراءة البيانات", details: String(e) }),
-        { status: 500, headers: CORS_HEADERS }
-      );
+      return json({ error: "تعذّر قراءة البيانات" }, 500, cors);
     }
   }
 
+  /* ---------------------------- PUT ---------------------------- */
   if (method === "PUT") {
-    const expectedPwd = process.env.ADMIN_PASSWORD || "";
-    if (!expectedPwd) {
-      return new Response(
-        JSON.stringify({
-          error: "لم يتم ضبط ADMIN_PASSWORD في Environment variables على Netlify.",
-        }),
-        { status: 500, headers: CORS_HEADERS }
-      );
-    }
+    const denied = requireAuth(req);
+    if (denied) return denied;
 
-    const auth = req.headers.get("authorization") || "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    if (token !== expectedPwd) {
-      return new Response(JSON.stringify({ error: "كلمة المرور غير صحيحة" }), {
-        status: 401,
-        headers: CORS_HEADERS,
-      });
-    }
+    const rl = await rateLimit("save", clientIp(req, context), { limit: 60, windowMs: 10 * 60 * 1000 });
+    if (!rl.allowed) return json({ error: "طلبات حفظ كثيرة، انتظر قليلاً" }, 429, { ...cors, "Retry-After": String(rl.retryAfterSec) });
+
+    const len = Number(req.headers.get("content-length") || 0);
+    if (len > LIMITS.bodyBytes) return json({ error: "حجم البيانات كبير جداً (الحدّ 3MB)" }, 413, cors);
+
+    let raw;
+    try { raw = await req.text(); } catch { return json({ error: "تعذّر قراءة الطلب" }, 400, cors); }
+    if (raw.length > LIMITS.bodyBytes) return json({ error: "حجم البيانات كبير جداً (الحدّ 3MB)" }, 413, cors);
 
     let body;
-    try {
-      body = await req.json();
-    } catch {
-      return new Response(JSON.stringify({ error: "JSON غير صالح" }), {
-        status: 400,
-        headers: CORS_HEADERS,
-      });
-    }
+    try { body = JSON.parse(raw); } catch { return json({ error: "JSON غير صالح" }, 400, cors); }
+    if (!hasValidShape(body)) return json({ error: "بنية البيانات غير صالحة" }, 400, cors);
 
-    if (
-      !body || typeof body !== "object" ||
-      !body.settings ||
-      !Array.isArray(body.products) ||
-      !Array.isArray(body.categories) ||
-      !Array.isArray(body.banners)
-    ) {
-      return new Response(
-        JSON.stringify({ error: "بنية البيانات غير صالحة" }),
-        { status: 400, headers: CORS_HEADERS }
-      );
-    }
-
-    body = normalizeData(body);
+    const clean = sanitizeStore(body);
 
     try {
-      const current = await store.get(KEY, { type: "json" });
-      if (current) await store.setJSON(PREV_BACKUP_KEY, normalizeData(current));
-      await store.setJSON(KEY, body);
-      await store.setJSON(BACKUP_KEY, body);
-      return new Response(JSON.stringify({ ok: true, savedAt: Date.now() }), {
-        status: 200,
-        headers: CORS_HEADERS,
-      });
+      const currentRec = await store.getWithMetadata(KEY, { type: "json" }).catch(() => null);
+      const currentVersion = Number(currentRec?.metadata?.version) || 0;
+      const baseVersion = Number(req.headers.get("x-base-version") || 0);
+      const force = req.headers.get("x-force") === "1";
+
+      if (!force && baseVersion && currentVersion && baseVersion !== currentVersion) {
+        return json({
+          error: "تم تعديل البيانات من جهاز آخر منذ آخر تحميل. أعد التحميل أو اختر (الكتابة فوقها).",
+          code: "CONFLICT", currentVersion,
+        }, 409, cors);
+      }
+
+      const newVersion = Math.max(Date.now(), currentVersion + 1);
+
+      if (currentRec?.data) {
+        const prev = sanitizeStore(currentRec.data);
+        await store.setJSON(PREV_BACKUP_KEY, prev);
+        // سجلّ تاريخي (آخر 20 نسخة) لاسترجاع أي خطأ
+        await store.setJSON(`${HISTORY_PREFIX}${currentVersion || Date.now()}.json`, prev).catch(() => {});
+        pruneHistory(store).catch(() => {});
+      }
+      await store.setJSON(KEY, clean, { metadata: { version: String(newVersion) } });
+      await store.setJSON(BACKUP_KEY, clean);
+
+      return json({ ok: true, savedAt: newVersion, version: newVersion, counts: {
+        products: clean.products.length, categories: clean.categories.length, banners: clean.banners.length,
+      } }, 200, cors);
     } catch (e) {
       console.error("PUT error", e);
-      return new Response(
-        JSON.stringify({ error: "تعذّر حفظ البيانات", details: String(e) }),
-        { status: 500, headers: CORS_HEADERS }
-      );
+      return json({ error: "تعذّر حفظ البيانات" }, 500, cors);
     }
   }
 
-  return new Response(JSON.stringify({ error: "Method not allowed" }), {
-    status: 405,
-    headers: CORS_HEADERS,
-  });
+  return json({ error: "Method not allowed" }, 405, cors);
 };
+
+async function pruneHistory(store) {
+  const { blobs } = await store.list({ prefix: HISTORY_PREFIX });
+  if (!blobs || blobs.length <= HISTORY_KEEP) return;
+  const sorted = blobs.map((b) => b.key).sort(); // الأقدم أولاً (مرقّمة بالطابع الزمني)
+  const toDelete = sorted.slice(0, sorted.length - HISTORY_KEEP);
+  await Promise.all(toDelete.map((k) => store.delete(k).catch(() => {})));
+}
 
 export const config = { path: "/api/data" };

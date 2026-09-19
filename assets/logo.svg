@@ -1,8 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect x="18" y="30" width="64" height="58" rx="10" fill="#0F3D2E"/>
-  <path d="M35 30 V22 a15 15 0 0 1 30 0 V30" stroke="#0F3D2E" stroke-width="5" fill="none" stroke-linecap="round"/>
-  <rect x="34" y="48" width="6" height="26" rx="2" fill="#C9A46A"/>
-  <rect x="47" y="44" width="6" height="30" rx="2" fill="#C9A46A"/>
-  <rect x="60" y="50" width="6" height="24" rx="2" fill="#C9A46A"/>
-  <path d="M30 78 Q50 82 70 78" stroke="#C9A46A" stroke-width="2" fill="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="CampusKart">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3468BC"/>
+      <stop offset="1" stop-color="#1F4A8F"/>
+    </linearGradient>
+  </defs>
+  <!-- خلفية زرقاء بزوايا مستديرة -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#bg)"/>
+  <!-- حقيبة تسوّق بيضاء -->
+  <path d="M17 24h30l-2.6 26.2A3 3 0 0 1 41.4 53H22.6a3 3 0 0 1-3-2.8L17 24z" fill="#fff"/>
+  <path d="M24 24v-4a8 8 0 0 1 16 0v4" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round"/>
+  <!-- ساعة رملية برتقالية (لمسة من شعار الجامعة) -->
+  <path d="M26 30h12l-4.6 7.5L38 45H26l4.6-7.5L26 30z" fill="#F39C1F"/>
+  <rect x="24.5" y="28" width="15" height="2.6" rx="1.3" fill="#F39C1F"/>
+  <rect x="24.5" y="44.4" width="15" height="2.6" rx="1.3" fill="#F39C1F"/>
 </svg>

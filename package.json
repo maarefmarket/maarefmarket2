@@ -1,7 +1,7 @@
 {
   "name": "campuskart",
-  "version": "2.0.0",
-  "description": "CampusKart - متجر الجامعة",
+  "version": "3.0.0",
+  "description": "CampusKart - متجر الجامعة (جامعة المعارف للعلوم التطبيقية)",
   "private": true,
   "type": "module",
   "scripts": {
