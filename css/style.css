@@ -9,7 +9,7 @@
   --accent:#F39C1F; --accent-soft:#FDE7C4; --accent-deep:#C67C0E;
   --on-brand:#FFFFFF;
   --danger:#DC2626; --success:#16A34A; --wa:#25D366;
-  --shadow:0 6px 20px rgba(43,95,179,.12);
+  --shadow:0 6px 20px color-mix(in srgb,var(--brand) 12%,transparent);
 }
 html[data-theme="dark"]{
   --bg:#0E1523; --surface:#161F32; --elevated:#1C2740; --line:#2A3752;
@@ -20,7 +20,7 @@ html[data-theme="dark"]{
   --shadow:0 6px 20px rgba(0,0,0,.35);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html{scroll-behavior:smooth}
+html{scroll-behavior:auto}
 body{background:var(--bg);color:var(--fg);font-family:'Noto Sans Arabic','Tajawal',system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
 h1,h2,h3{font-family:'Cairo','Noto Sans Arabic',sans-serif;letter-spacing:-.01em}
 a{color:inherit;text-decoration:none}
@@ -75,11 +75,11 @@ header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 9
 .banner-area{margin-bottom:16px}
 .banner{position:relative;border-radius:18px;overflow:hidden;border:1px solid var(--line);min-height:180px;display:block}
 .banner img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
-.banner .ov{position:absolute;inset:0;background:linear-gradient(to top,rgba(31,74,143,.88),rgba(31,74,143,.15) 70%,transparent)}
+.banner .ov{position:absolute;inset:0;background:linear-gradient(to top,color-mix(in srgb,var(--brand-2) 88%,transparent),color-mix(in srgb,var(--brand-2) 15%,transparent) 70%,transparent)}
 .banner .txt{position:relative;padding:32px 22px;color:#fff;min-height:180px;display:flex;flex-direction:column;justify-content:flex-end}
 .banner .ey{color:var(--accent);font-weight:700;font-size:11px;letter-spacing:.18em;text-transform:uppercase}
 .banner h2{font-size:clamp(20px,4vw,34px);margin:6px 0;color:#fff}
-.banner.empty{background:linear-gradient(120deg,#1F4A8F,#2B5FB3 60%,#3E74CC)}
+.banner.empty{background:linear-gradient(120deg,var(--brand-2),var(--brand) 60%,color-mix(in srgb,var(--brand) 80%,#fff))}
 .banner-dots{display:flex;gap:6px;justify-content:center;margin-top:8px}
 .banner-dots i{width:6px;height:6px;border-radius:999px;background:var(--line);transition:.2s}
 .banner-dots i.active{background:var(--accent);width:20px}

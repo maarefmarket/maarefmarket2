@@ -157,7 +157,7 @@ function switchTab(tab) {
 }
 function renderAll() {
   $("storeNameLabel").textContent = DATA.settings.storeName ? "— " + DATA.settings.storeName : "";
-  renderCategoryDropdowns(); renderProducts(); renderCategories(); renderBanners(); renderRates(); renderSettings();
+  renderCategoryDropdowns(); renderProducts(); renderCategories(); renderBanners(); renderRates(); renderSettings(); renderColors();
 }
 
 /* ---------- تحليل الأسعار ---------- */
@@ -213,7 +213,7 @@ function renderProducts() {
       <td><strong>${esc(p.name)}</strong>${p.group ? `<div class="hint">🧩 ${esc(p.group)}</div>` : ""}${p.variants?.length ? `<div class="hint">${p.variants.length} أنواع داخلية</div>` : ""}</td>
       <td>${esc(catMap[p.category] || p.category)}</td>
       <td>${p.prices.USD || 0}</td><td>${p.prices.TRY || 0}</td><td>${(p.prices.SYP || 0).toLocaleString("en-US")}</td>
-      <td><span class="pill ${av}">${av === "in" ? "متوفر" : av === "limited" ? "محدود" : "غير متوفر"}</span></td>
+      <td><span class="pill ${av}" title="${av === "out" ? "مخفي من الموقع — يبقى هنا فقط" : ""}">${av === "in" ? "متوفر" : av === "limited" ? "محدود" : "🚫 مخفي"}</span></td>
       <td><div class="row-actions">
         <button class="btn btn-info btn-sm" data-edit-product="${p.id}" title="تعديل">✏️</button>
         <button class="btn btn-ghost btn-sm" data-dup-product="${p.id}" title="نسخ">📋</button>
@@ -621,6 +621,100 @@ function bindSettings() {
   });
 }
 
+/* ---------- ألوان الموقع ---------- */
+const THEME_FIELDS = [
+  { key: "brand",      name: "اللون الرئيسي",           desc: "الشعار، الأزرار الرئيسية، العناوين، الأسعار، القسم المحدّد" },
+  { key: "brand2",     name: "الرئيسي الداكن",           desc: "عند التمرير على الأزرار وتدرّج الإعلانات" },
+  { key: "brandSoft",  name: "الرئيسي الفاتح",           desc: "خلفية شارة المجموعة وتركيز الحقول" },
+  { key: "onBrand",    name: "نص فوق اللون الرئيسي",     desc: "لون الكتابة داخل الأزرار الرئيسية" },
+  { key: "accent",     name: "اللون المميّز (Accent)",   desc: "شارة جديد، عدّاد السلة، خط العناوين، النقطة في الشعار" },
+  { key: "accentDeep", name: "المميّز الداكن",             desc: "اسم القسم في البطاقة، ملاحظة التوصيل" },
+  { key: "accentSoft", name: "المميّز الفاتح",             desc: "خلفية الملاحظات ووسم كمية محدودة" },
+  { key: "bg",         name: "خلفية الصفحة",              desc: "لون خلفية الموقع العامة" },
+  { key: "surface",    name: "خلفية البطاقات",            desc: "بطاقات المنتجات، القوائم، التذييل" },
+  { key: "elevated",   name: "خلفية ثانوية",              desc: "مكان الصورة الفارغ، عدّاد الكمية، الأزرار الباهتة" },
+  { key: "line",       name: "الحدود",                     desc: "خطوط الفصل وحدود البطاقات والحقول" },
+  { key: "fg",         name: "لون النص",                   desc: "النص الأساسي في الموقع" },
+  { key: "muted",      name: "النص الثانوي",               desc: "الأوصاف، العدّادات، النصوص الباهتة" },
+  { key: "wa",         name: "زر واتساب",                 desc: "أزرار الطلب والاستفسار" },
+  { key: "success",    name: "لون متوفر",                 desc: "وسم (متوفر) في صفحة المنتج" },
+  { key: "danger",     name: "لون التحذير",                desc: "شارة العرض، زر الحذف، رسائل الخطأ" },
+];
+const THEME_DEFAULTS = {
+  light: { bg: "#F4F7FC", surface: "#FFFFFF", elevated: "#EAF0FA", line: "#DCE4F2", fg: "#1B2333", muted: "#66738A", brand: "#2B5FB3", brand2: "#1F4A8F", brandSoft: "#E3ECFA", accent: "#F39C1F", accentSoft: "#FDE7C4", accentDeep: "#C67C0E", onBrand: "#FFFFFF", wa: "#25D366", danger: "#DC2626", success: "#16A34A" },
+  dark:  { bg: "#0E1523", surface: "#161F32", elevated: "#1C2740", line: "#2A3752", fg: "#E8EEF8", muted: "#97A5BF", brand: "#6A9BE8", brand2: "#8AB2F0", brandSoft: "#1F2E4D", accent: "#F7AE45", accentSoft: "#3A2C12", accentDeep: "#F39C1F", onBrand: "#0E1523", wa: "#25D366", danger: "#DC2626", success: "#16A34A" },
+};
+const THEME_PRESETS = [
+  { name: "جامعة المعارف (أزرق/برتقالي)", light: {}, dark: {} },
+  { name: "أخضر غابي/ذهبي", light: { brand: "#0F3D2E", brand2: "#164A37", brandSoft: "#E2EFE9", accent: "#C9A46A", accentSoft: "#F3E9D6", accentDeep: "#A4812F", bg: "#F5F7F6", elevated: "#EEF2EF", line: "#E0E5E2" }, dark: { brand: "#C9A46A", brand2: "#E0C28E", brandSoft: "#2A2A1C", accent: "#E0C28E", accentSoft: "#3A3220", accentDeep: "#C9A46A", onBrand: "#0F1614", bg: "#0F1614", surface: "#182320", elevated: "#1E2A26", line: "#2A3835" } },
+  { name: "أحمر جامعي", light: { brand: "#B3261E", brand2: "#8C1D17", brandSoft: "#FBE5E3", accent: "#F2B134", accentSoft: "#FDEFD0", accentDeep: "#B8801A" }, dark: { brand: "#F28B82", brand2: "#F6A9A2", brandSoft: "#3A1F1E", accent: "#F7C35F", accentSoft: "#3A2E12", accentDeep: "#F2B134", onBrand: "#1B0F0E" } },
+  { name: "بنفسجي عصري", light: { brand: "#6D28D9", brand2: "#5B21B6", brandSoft: "#EDE9FE", accent: "#F59E0B", accentSoft: "#FEF3C7", accentDeep: "#B45309" }, dark: { brand: "#A78BFA", brand2: "#C4B5FD", brandSoft: "#2E1F4D", accent: "#FBBF24", accentSoft: "#3A2E12", accentDeep: "#F59E0B", onBrand: "#120B24" } },
+  { name: "أسود/ذهبي فاخر", light: { brand: "#1B1B1F", brand2: "#000000", brandSoft: "#ECECEE", accent: "#D4AF37", accentSoft: "#F6EFD6", accentDeep: "#9C7C1C", bg: "#F7F7F5", line: "#E3E3DF" }, dark: { brand: "#D4AF37", brand2: "#E6C864", brandSoft: "#2A2510", accent: "#E6C864", accentSoft: "#3A3212", accentDeep: "#D4AF37", onBrand: "#111111", bg: "#0D0D0F", surface: "#17171A", elevated: "#1F1F23", line: "#2B2B30" } },
+  { name: "فيروزي منعش", light: { brand: "#0E7490", brand2: "#155E75", brandSoft: "#E0F2F7", accent: "#F97316", accentSoft: "#FFEDD5", accentDeep: "#C2410C" }, dark: { brand: "#22D3EE", brand2: "#67E8F9", brandSoft: "#0F2A33", accent: "#FB923C", accentSoft: "#3A2212", accentDeep: "#F97316", onBrand: "#06141A" } },
+];
+let themeMode = "light";
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
+
+function ensureTheme() {
+  const s = DATA.settings;
+  if (!s.theme || typeof s.theme !== "object") s.theme = {};
+  if (!s.theme.light) s.theme.light = {};
+  if (!s.theme.dark) s.theme.dark = {};
+  return s.theme;
+}
+const themeValue = (mode, key) => { const v = DATA.settings.theme?.[mode]?.[key]; return HEX_RE.test(v || "") ? v.toUpperCase() : THEME_DEFAULTS[mode][key]; };
+
+function renderColors() {
+  if (!DATA) return;
+  $("modeLightBtn").className = "btn btn-sm " + (themeMode === "light" ? "btn-primary" : "btn-ghost");
+  $("modeDarkBtn").className = "btn btn-sm " + (themeMode === "dark" ? "btn-primary" : "btn-ghost");
+  $("colorFields").innerHTML = THEME_FIELDS.map((f) => {
+    const v = themeValue(themeMode, f.key);
+    return `<div class="color-field">
+      <input type="color" value="${v}" data-color-key="${f.key}" aria-label="${esc(f.name)}">
+      <div class="cf-body"><div class="cf-name">${esc(f.name)}</div><div class="cf-desc">${esc(f.desc)}</div></div>
+      <input class="field cf-hex" value="${v}" maxlength="7" data-hex-key="${f.key}" spellcheck="false">
+    </div>`;
+  }).join("");
+  $("themePresets").innerHTML = THEME_PRESETS.map((p, i) => {
+    const l = { ...THEME_DEFAULTS.light, ...p.light };
+    return `<button type="button" class="preset-btn" data-preset="${i}"><i style="background:${l.brand}"></i><i style="background:${l.accent}"></i>${esc(p.name)}</button>`;
+  }).join("");
+  renderThemePreview();
+}
+function renderThemePreview() {
+  const tp = $("themePreview");
+  for (const f of THEME_FIELDS) tp.style.setProperty("--p-" + f.key, themeValue(themeMode, f.key));
+}
+function setThemeColor(key, value) {
+  if (!HEX_RE.test(value)) return false;
+  const t = ensureTheme();
+  const v = value.toUpperCase();
+  if (v === THEME_DEFAULTS[themeMode][key]) delete t[themeMode][key]; else t[themeMode][key] = v;
+  // مزامنة الحقلين (اللون والنص)
+  const c = document.querySelector(`[data-color-key="${key}"]`), h = document.querySelector(`[data-hex-key="${key}"]`);
+  if (c && c.value.toUpperCase() !== v) c.value = v;
+  if (h && h.value.toUpperCase() !== v) h.value = v;
+  renderThemePreview(); updateDirty();
+  return true;
+}
+function applyPreset(i) {
+  const p = THEME_PRESETS[i]; if (!p) return;
+  if (!confirm(`تطبيق حزمة «${p.name}» على الوضعين النهاري والليلي؟ (ستُستبدل الألوان الحالية)`)) return;
+  DATA.settings.theme = { light: { ...p.light }, dark: { ...p.dark } };
+  renderColors(); updateDirty(); toast(`✓ طُبّقت حزمة ${p.name} — اضغط حفظ للنشر`, "success");
+}
+function bindColorsTab() {
+  $("colorFields").addEventListener("input", (e) => {
+    if (e.target.dataset.colorKey) setThemeColor(e.target.dataset.colorKey, e.target.value);
+    else if (e.target.dataset.hexKey) { let v = e.target.value.trim(); if (!v.startsWith("#")) v = "#" + v; if (HEX_RE.test(v)) setThemeColor(e.target.dataset.hexKey, v); }
+  });
+  $("colorFields").addEventListener("change", (e) => {
+    if (e.target.dataset.hexKey) { let v = e.target.value.trim(); if (!v.startsWith("#")) v = "#" + v; if (!HEX_RE.test(v)) { e.target.value = themeValue(themeMode, e.target.dataset.hexKey); toast("صيغة اللون: #RRGGBB", "error"); } }
+  });
+  $("themePresets").addEventListener("click", (e) => { const b = e.target.closest("[data-preset]"); if (b) applyPreset(+b.dataset.preset); });
+}
+
 /* ---------- النسخ الاحتياطي ---------- */
 function exportJSON() {
   if (!DATA) return;
@@ -652,11 +746,12 @@ async function resetAll() {
 
 /* ---------- ربط الأحداث ---------- */
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-action],[data-tab],[data-close],[data-bulk],[data-edit-product],[data-dup-product],[data-sibling-product],[data-del-product],[data-main-image],[data-remove-image],[data-remove-variant],[data-move-cat],[data-edit-cat],[data-del-cat],[data-move-banner],[data-edit-banner],[data-del-banner],[data-remove-wa]");
+  const t = e.target.closest("[data-action],[data-tab],[data-close],[data-theme-mode],[data-bulk],[data-edit-product],[data-dup-product],[data-sibling-product],[data-del-product],[data-main-image],[data-remove-image],[data-remove-variant],[data-move-cat],[data-edit-cat],[data-del-cat],[data-move-banner],[data-edit-banner],[data-del-banner],[data-remove-wa]");
   if (!t) return;
   const d = t.dataset;
   if (d.tab) return switchTab(d.tab);
   if (d.close) return $(d.close).classList.remove("open");
+  if (d.themeMode) { themeMode = d.themeMode; return renderColors(); }
   if (d.bulk) { const [f, s] = d.bulk.split("|"); return applyBulk(f, s); }
   if (d.editProduct) return openProductModal(+d.editProduct);
   if (d.dupProduct) return duplicateProduct(+d.dupProduct);
@@ -689,6 +784,8 @@ document.addEventListener("click", (e) => {
     case "apply-rates": return applyRatesToAll();
     case "add-whatsapp": if (ensureWhatsappList().length >= 10) return toast("الحدّ 10 أرقام", "error"); ensureWhatsappList().push(""); renderWhatsappList(); return updateDirty();
     case "reset-template": if (confirm("إعادة القالب للافتراضي؟")) { DATA.settings.msgTemplate = DEFAULT_MSG_TEMPLATE; $("setMsgTemplate").value = DEFAULT_MSG_TEMPLATE; updateDirty(); } return;
+    case "theme-reset-mode": if (confirm(`استرجاع الألوان الأصلية للوضع ${themeMode === "light" ? "النهاري" : "الليلي"}؟`)) { ensureTheme()[themeMode] = {}; renderColors(); updateDirty(); } return;
+    case "theme-reset-all": if (confirm("استرجاع كل الألوان الأصلية (نهاري + ليلي)؟")) { delete DATA.settings.theme; renderColors(); updateDirty(); } return;
     case "export": return exportJSON();
     case "import": return importJSON();
     case "reset-all": return resetAll();
@@ -722,6 +819,6 @@ $("themeToggleBtn").addEventListener("click", () => applyAdminTheme(document.doc
   let saved = "light";
   try { saved = localStorage.getItem("ck_admin_theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch {}
   applyAdminTheme(saved);
-  bindSettings(); bindImageDropzone(); bindRatesTab();
+  bindSettings(); bindImageDropzone(); bindRatesTab(); bindColorsTab();
   if (!(await autoLogin())) { $("loginScreen").style.display = "grid"; $("appScreen").style.display = "none"; }
 })();

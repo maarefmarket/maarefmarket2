@@ -50,6 +50,28 @@ export function slug(v) {
   return str(v, 60).toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 60);
 }
 
+/** لون hex سداسي فقط (#RRGGBB) */
+export function hexColor(v) {
+  const s = String(v ?? "").trim();
+  return /^#[0-9a-fA-F]{6}$/.test(s) ? s.toUpperCase() : "";
+}
+const THEME_KEYS = ["bg", "surface", "elevated", "line", "fg", "muted", "brand", "brand2", "brandSoft", "accent", "accentSoft", "accentDeep", "onBrand", "wa", "danger", "success"];
+function themeMode(v) {
+  if (!v || typeof v !== "object") return undefined;
+  const out = {};
+  for (const k of THEME_KEYS) { const c = hexColor(v[k]); if (c) out[k] = c; }
+  return Object.keys(out).length ? out : undefined;
+}
+export function sanitizeTheme(v) {
+  if (!v || typeof v !== "object") return undefined;
+  const light = themeMode(v.light), dark = themeMode(v.dark);
+  if (!light && !dark) return undefined;
+  const out = {};
+  if (light) out.light = light;
+  if (dark) out.dark = dark;
+  return out;
+}
+
 export function digits(v, max = 20) {
   return String(v ?? "").replace(/\D/g, "").slice(0, max);
 }
@@ -139,6 +161,8 @@ export function sanitizeStore(input) {
     baseCurrency: CURS.includes(s.baseCurrency) ? s.baseCurrency : "USD",
     rates,
   };
+  const theme = sanitizeTheme(s.theme);
+  if (theme) settings.theme = theme;
 
   const seenSlugs = new Set();
   const categories = (Array.isArray(safe.categories) ? safe.categories : [])

@@ -35,12 +35,36 @@ async function loadData() {
       SETTINGS.bannerIntervalSec = Math.max(2, parseInt(SETTINGS.bannerIntervalSec, 10) || 7);
       BANNERS = Array.isArray(data.banners) ? data.banners : [];
       CATEGORIES = Array.isArray(data.categories) ? data.categories : [];
-      PRODUCTS = (Array.isArray(data.products) ? data.products : []).map((p) => ({ ...p, prices: p.prices || {}, images: Array.isArray(p.images) ? p.images : [] }));
+      // المنتجات غير المتوفرة تُخفى من الموقع كلياً (تبقى في لوحة التحكم فقط)
+      PRODUCTS = (Array.isArray(data.products) ? data.products : [])
+        .filter((p) => p && p.availability !== "out")
+        .map((p) => ({ ...p, prices: p.prices || {}, images: Array.isArray(p.images) ? p.images : [] }));
+      applyTheme(SETTINGS.theme);
       return true;
     } catch (e) { console.warn("loadData fallback", url, e); }
   }
   $("app").innerHTML = `<div class="empty"><h2 class="section-title center">تعذّر تحميل المتجر</h2><p style="margin-top:8px">حدّث الصفحة بعد قليل.</p></div>`;
   return false;
+}
+
+/* ---------- الألوان المخصّصة من لوحة التحكم ---------- */
+const THEME_VARS = { bg: "--bg", surface: "--surface", elevated: "--elevated", line: "--line", fg: "--fg", muted: "--muted", brand: "--brand", brand2: "--brand-2", brandSoft: "--brand-soft", accent: "--accent", accentSoft: "--accent-soft", accentDeep: "--accent-deep", onBrand: "--on-brand", wa: "--wa", danger: "--danger", success: "--success" };
+function themeCSS(theme) {
+  if (!theme || typeof theme !== "object") return "";
+  const ok = (c) => /^#[0-9a-fA-F]{6}$/.test(String(c || ""));
+  const block = (sel, m) => {
+    if (!m) return "";
+    const rules = Object.entries(THEME_VARS).filter(([k]) => ok(m[k])).map(([k, v]) => `${v}:${m[k]}`).join(";");
+    return rules ? `${sel}{${rules}}` : "";
+  };
+  return block(":root", theme.light) + block('html[data-theme="dark"]', theme.dark);
+}
+function applyTheme(theme) {
+  let st = $("customTheme");
+  if (!st) { st = document.createElement("style"); st.id = "customTheme"; document.head.appendChild(st); }
+  st.textContent = themeCSS(theme);
+  const brand = theme?.light?.brand;
+  if (brand) { const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute("content", brand); }
 }
 
 /* ---------- تنسيق الأسعار ---------- */
@@ -223,13 +247,20 @@ function checkout() {
 }
 
 /* ---------- التنقّل ---------- */
-function go(path) { location.hash = path ? "#" + path : "#"; }
+// التنقل عبر hash بدون أي قفزة/سحب للشاشة
+function go(path) {
+  const h = path ? "#" + path : "#";
+  if (location.hash === h) return route();
+  history.pushState(null, "", h);
+  route();
+}
 function navTo(path) {
   state.q = ""; $("searchInput").value = "";
   const same = "#" + path === location.hash || (path === "" && (location.hash === "" || location.hash === "#"));
   same ? route() : go(path);
 }
 window.addEventListener("hashchange", route);
+window.addEventListener("popstate", route);
 window.addEventListener("pageshow", async (e) => { if (e.persisted) { await loadData(); loadCart(); pruneCart(); updateCartCount(); route(); } });
 
 /* ---------- المكوّنات ---------- */
@@ -421,7 +452,6 @@ function renderProduct(id) {
       </div>
     </div>
     ${similarHTML(p)}`;
-  window.scrollTo(0, 0);
 }
 function gSet(i) {
   const p = byId(curProductId()); if (!p) return;

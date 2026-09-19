@@ -52,6 +52,7 @@
         <button class="tab" data-tab="categories">🗂 الأقسام</button>
         <button class="tab" data-tab="banners">🎯 الإعلانات</button>
         <button class="tab" data-tab="rates">💱 أسعار الصرف</button>
+        <button class="tab" data-tab="colors">🎨 الألوان</button>
         <button class="tab" data-tab="settings">⚙️ الإعدادات</button>
         <button class="tab" data-tab="backup">💼 نسخ احتياطي</button>
       </div>
@@ -71,9 +72,10 @@
         <select id="filterCat" class="field"><option value="">كل الأقسام</option></select>
         <select id="filterAvail" class="field">
           <option value="">كل الحالات</option><option value="in">متوفر</option>
-          <option value="limited">كمية محدودة</option><option value="out">غير متوفر</option>
+          <option value="limited">كمية محدودة</option><option value="out">غير متوفر (مخفي)</option>
         </select>
       </div>
+      <div class="hint" style="margin:-6px 0 10px">🚫 المنتج بحالة <strong>غير متوفر</strong> يختفي من الموقع تماماً للزوار (كأنه محذوف) لكنه يبقى هنا مع كل بياناته — غيّر حالته إلى متوفر ليعود.</div>
       <div class="table-wrap">
         <table>
           <thead><tr><th>الصورة</th><th>الاسم</th><th>القسم</th><th>$</th><th>₺</th><th>ل.س</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
@@ -132,6 +134,51 @@
         <button class="btn btn-primary" data-action="apply-rates">🔄 تطبيق أسعار الصرف على جميع المنتجات</button>
       </div>
       <div class="card"><h3>👁 معاينة</h3><div id="ratesPreview" style="line-height:2;font-size:14px"></div></div>
+    </section>
+
+    <!-- الألوان -->
+    <section id="tab-colors" class="tab-pane" style="display:none">
+      <div class="section-head">
+        <div><h2>🎨 ألوان الموقع</h2><p>تحكّم بكل ألوان واجهة المتجر للوضعين النهاري والليلي. التغييرات تظهر للزوار بعد الضغط على حفظ.</p></div>
+        <div class="item-actions">
+          <button class="btn btn-ghost" data-action="theme-reset-mode">↩ استرجاع الوضع الحالي</button>
+          <button class="btn btn-danger" data-action="theme-reset-all">↩ استرجاع كل الألوان الأصلية</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>⚡ حزم جاهزة</h3>
+        <div class="hint" style="margin-bottom:8px">اضغط لتطبيق حزمة كاملة (نهاري + ليلي) ثم عدّل ما تشاء أدناه.</div>
+        <div id="themePresets" class="item-actions"></div>
+      </div>
+
+      <div class="card">
+        <div class="label-row" style="flex-wrap:wrap;gap:10px">
+          <h3 style="margin:0">🖌️ تحرير الألوان</h3>
+          <div class="item-actions">
+            <button class="btn btn-sm btn-primary" id="modeLightBtn" data-theme-mode="light">☀️ الوضع النهاري</button>
+            <button class="btn btn-sm btn-ghost" id="modeDarkBtn" data-theme-mode="dark">🌙 الوضع الليلي</button>
+          </div>
+        </div>
+        <div id="colorFields" class="color-grid"></div>
+      </div>
+
+      <div class="card">
+        <h3>👁 معاينة مباشرة</h3>
+        <div class="hint" style="margin-bottom:8px">معاينة تقريبية للمتجر بالألوان الحالية (الوضع المحدّد أعلاه).</div>
+        <div id="themePreview" class="tp">
+          <div class="tp-header"><span class="tp-logo">CampusKart<b>.</b></span><span class="tp-search">ابحث عن منتج...</span><span class="tp-cart">🛒<i>3</i></span></div>
+          <div class="tp-chips"><span class="tp-chip active">🏠 الرئيسية</span><span class="tp-chip">🆕 جديد</span><span class="tp-chip">مشروبات</span><span class="tp-chip">شيبسات</span></div>
+          <div class="tp-banner"><small>عروض الطلاب</small><strong>كل ما تحتاجه في مكان واحد</strong></div>
+          <div class="tp-title">جميع المنتجات</div>
+          <div class="tp-grid">
+            <div class="tp-card"><div class="tp-img"><span class="tp-badge">جديد</span></div><div class="tp-cat">مشروبات</div><div class="tp-name">كنزا كولا 330 مل</div><div class="tp-desc">وصف مختصر للمنتج</div><div class="tp-price">0.5 $</div><div class="tp-qty"><span>−</span><b>0</b><span>+</span></div><div class="tp-actions"><span class="tp-outline">🛒</span><span class="tp-wa">📲 اطلب</span></div></div>
+            <div class="tp-card"><div class="tp-img"><span class="tp-badge lim">محدود</span></div><div class="tp-cat">شيبسات</div><div class="tp-name">شيبس برنجلز</div><div class="tp-desc">وصف مختصر للمنتج</div><div class="tp-price">1.5 $</div><div class="tp-qty"><span>−</span><b>0</b><span>+</span></div><div class="tp-actions"><span class="tp-outline">🛒</span><span class="tp-wa">📲 اطلب</span></div></div>
+          </div>
+          <div class="tp-btn">أضف إلى السلة 🛒</div>
+          <div class="tp-foot">توصيل داخل الحرم الجامعي · الدفع عند الاستلام</div>
+        </div>
+      </div>
     </section>
 
     <!-- الإعدادات -->
@@ -241,7 +288,7 @@
     <div class="hint mt">💡 إن كان السعر القديم أعلى من الحالي تظهر شارة <strong>عرض</strong> مع السعر المشطوب.</div>
     <div class="row cols-2 mt">
       <div><label class="label">الحالة *</label>
-        <select id="mpAvail" class="field"><option value="in">متوفر</option><option value="limited">كمية محدودة</option><option value="out">غير متوفر</option></select></div>
+        <select id="mpAvail" class="field"><option value="in">متوفر</option><option value="limited">كمية محدودة</option><option value="out">غير متوفر (يُخفى من الموقع)</option></select></div>
       <div><label class="label">عدد المشاهدات</label><input id="mpViews" type="number" min="0" class="field" placeholder="0"></div>
     </div>
     <div class="row mt"><div><label class="label">الوصف</label><textarea id="mpDesc" class="field" rows="2" maxlength="400" placeholder="وصف قصير للمنتج..."></textarea></div></div>
