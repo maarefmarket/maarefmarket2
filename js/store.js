@@ -247,20 +247,25 @@ function checkout() {
 }
 
 /* ---------- التنقّل ---------- */
-// التنقل عبر hash بدون أي قفزة/سحب للشاشة
+// الانتقال لأعلى الصفحة فوراً (بدون أنيميشن سحب) عند كل تنقّل داخل المتجر
+function jumpTop() {
+  document.documentElement.style.scrollBehavior = "auto";
+  window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+  document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
+}
 function go(path) {
   const h = path ? "#" + path : "#";
-  if (location.hash === h) return route();
-  history.pushState(null, "", h);
-  route();
+  if (location.hash !== h) history.pushState(null, "", h);
+  route(); jumpTop();
 }
 function navTo(path) {
   state.q = ""; $("searchInput").value = "";
-  const same = "#" + path === location.hash || (path === "" && (location.hash === "" || location.hash === "#"));
-  same ? route() : go(path);
+  go(path);
 }
-window.addEventListener("hashchange", route);
-window.addEventListener("popstate", route);
+// زر الرجوع/التقدم في المتصفح أو تغيير الرابط يدوياً
+window.addEventListener("hashchange", () => { route(); jumpTop(); });
+window.addEventListener("popstate", () => { route(); jumpTop(); });
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 window.addEventListener("pageshow", async (e) => { if (e.persisted) { await loadData(); loadCart(); pruneCart(); updateCartCount(); route(); } });
 
 /* ---------- المكوّنات ---------- */
