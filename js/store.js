@@ -153,14 +153,33 @@ function cardStep(id, d) {
     box.querySelector(".qminus").disabled = nx <= 0;
   });
 }
-function cartTotals() {
-  const t = { SYP: 0, USD: 0, TRY: 0 };
-  for (const key in cart) {
+/* ---------- حساب الإجمالي (بدقة، بدون أخطاء الفاصلة العشرية) ---------- */
+// كل منتج يُحاسب بعملة واحدة: الدولار إن كان مرئياً، وإلا أول عملة مرئية له (تركي ثم سوري)
+function billingCur(it) {
+  const vis = visibleCurs({ prices: it.prices, showCurrencies: it.showCurrencies });
+  return vis.includes(PRIMARY) ? PRIMARY : vis[0] || null;
+}
+// العمليات بالقروش (×100) لتجنّب مثل 0.1+0.2=0.30000000000000004
+const toCents = (v) => Math.round((parseFloat(v) || 0) * 100);
+const fromCents = (c) => c / 100;
+function lineTotal(it, q) {
+  const c = billingCur(it);
+  if (!c) return null;
+  return { cur: c, unit: fromCents(toCents(it.prices[c])), total: fromCents(toCents(it.prices[c]) * q) };
+}
+/** يُرجع { USD:{sum,count}, TRY:{...}, SYP:{...} } — كل عملة تجمع منتجاتها فقط */
+function cartTotals(src) {
+  src = src || cart;
+  const cents = { USD: 0, TRY: 0, SYP: 0 }, count = { USD: 0, TRY: 0, SYP: 0 };
+  for (const key in src) {
     const it = resolveItem(key); if (!it) continue;
-    const vis = visibleCurs({ prices: it.prices, showCurrencies: it.showCurrencies });
-    for (const [c] of CUR) if (vis.includes(c)) t[c] += (it.prices[c] || 0) * cart[key];
+    const q = parseInt(src[key], 10) || 0; if (q <= 0) continue;
+    const c = billingCur(it); if (!c) continue;
+    cents[c] += toCents(it.prices[c]) * q; count[c] += 1;
   }
-  return t;
+  const out = {};
+  for (const c of Object.keys(cents)) out[c] = { sum: fromCents(cents[c]), count: count[c] };
+  return out;
 }
 function updateCartCount() {
   const n = cartQty(); const el = $("cartCount");
@@ -187,26 +206,35 @@ const DEFAULT_MSG_TEMPLATE = `السلام عليكم
 
 شكراً لكم 🌿`;
 
+const CUR_AR = { USD: "بالدولار", TRY: "بالتركي", SYP: "بالسوري" };
+function totalsLines(t) {
+  const lines = [];
+  for (const c of ["USD", "TRY", "SYP"]) {
+    if (t[c] && t[c].count > 0) lines.push(`• ${CUR_AR[c]} (${t[c].count} منتج): *${money(t[c].sum, c)}*`);
+  }
+  return lines;
+}
 function buildOrderMessage(notes, fromCart) {
   const src = fromCart || cart;
-  const keys = Object.keys(src).filter((k) => resolveItem(k));
+  const keys = Object.keys(src).filter((k) => resolveItem(k) && (parseInt(src[k], 10) || 0) > 0);
   if (!keys.length) return "";
-  const t = { SYP: 0, USD: 0, TRY: 0 };
   const itemLines = keys.map((key) => {
-    const it = resolveItem(key); const q = src[key];
-    const vis = visibleCurs({ prices: it.prices, showCurrencies: it.showCurrencies });
-    const primary = vis.includes(PRIMARY) ? PRIMARY : vis[0] || PRIMARY;
-    for (const c of vis) t[c] += (it.prices[c] || 0) * q;
-    return `• *${it.name}* × ${q} — ${money((it.prices[primary] || 0) * q, primary)}`;
+    const it = resolveItem(key); const q = parseInt(src[key], 10) || 0;
+    const lt = lineTotal(it, q);
+    if (!lt) return `• *${it.name}* × ${q}`;
+    return `• *${it.name}* × ${q} — ${money(lt.unit, lt.cur)} للقطعة = ${money(lt.total, lt.cur)}`;
   });
-  const totalLines = [];
-  if (t.TRY > 0) totalLines.push(`• التركي: *${money(t.TRY, "TRY")}*`);
-  if (t.SYP > 0) totalLines.push(`• السوري: *${money(t.SYP, "SYP")}*`);
-  if (t.USD > 0) totalLines.push(`• الدولار: *${money(t.USD, "USD")}*`);
+  const totals = totalsLines(cartTotals(src));
+  const totalsText = totals.length ? totals.join("\n") : "—";
   const notesLine = notes && notes.trim() ? `📝 ملاحظة: ${notes.trim().slice(0, 500)}` : "";
-  return (SETTINGS.msgTemplate || DEFAULT_MSG_TEMPLATE)
+  let template = SETTINGS.msgTemplate || DEFAULT_MSG_TEMPLATE;
+  // ضمان: إن كان القالب المخصّص بلا {items} أو {totals} نضيفهما حتى لا يضيع الطلب أو الإجمالي
+  if (!template.includes("{items}")) template = template.replace(/\s*$/, "") + "\n\n{items}";
+  if (!template.includes("{totals}")) template += "\n\nالسعر النهائي الإجمالي:\n{totals}";
+  if (!template.includes("{notes}") && notesLine) template += "\n\n{notes}";
+  return template
     .replace(/{items}/g, itemLines.join("\n"))
-    .replace(/{totals}/g, totalLines.join("\n"))
+    .replace(/{totals}/g, totalsText)
     .replace(/{notes}/g, notesLine)
     .replace(/{store}/g, SETTINGS.storeName || "")
     .replace(/\n{3,}/g, "\n\n").trim();
@@ -487,26 +515,28 @@ function renderCart() {
   const rows = keys.map((key) => {
     const q = cart[key]; const it = resolveItem(key);
     const img = safeSrc(it.image);
-    const vis = visibleCurs({ prices: it.prices, showCurrencies: it.showCurrencies });
-    const prim = vis.includes(PRIMARY) ? PRIMARY : vis[0] || PRIMARY;
+    const lt = lineTotal(it, q);
     return `<div class="cart-item">
       ${img ? `<img src="${img}" alt="${esc(it.p.name)}" data-open="${it.p.id}" style="cursor:pointer">` : '<div class="ph">🛍️</div>'}
       <div class="ci-body">
         <div class="ci-name">${esc(it.name)}</div>
-        <div class="ci-price">${money(it.prices[prim], prim)} · للقطعة</div>
+        <div class="ci-price">${lt ? money(lt.unit, lt.cur) + " · للقطعة" : ""}</div>
         <div class="qty" style="margin-top:5px"><button data-cstep="${esc(key)}|-1" aria-label="إنقاص">−</button><span>${q}</span><button data-cstep="${esc(key)}|1" aria-label="زيادة">+</button></div>
       </div>
       <div style="text-align:end">
-        <div class="ci-total">${money((it.prices[prim] || 0) * q, prim)}</div>
+        <div class="ci-total">${lt ? money(lt.total, lt.cur) : ""}</div>
         <button class="link-remove" data-cremove="${esc(key)}">حذف</button>
       </div></div>`;
   }).join("");
-  const totalsRows = CUR.filter(([c]) => t[c] > 0);
+  const totalsRows = ["USD", "TRY", "SYP"].filter((c) => t[c].count > 0);
   $("app").innerHTML = `
     <nav class="crumb"><button data-nav="">الرئيسية</button><span>/</span><span style="color:var(--fg)">السلة</span></nav>
     <h2 class="section-title" style="margin-bottom:10px">🛒 سلة المشتريات</h2>
     <div>${rows}</div>
-    <div class="cart-totals">${totalsRows.map(([c], i) => `<div class="t-row ${i === totalsRows.length - 1 ? "big" : ""}"><span>الإجمالي (${CUR.find((x) => x[0] === c)[1]})</span><span>${money(t[c], c)}</span></div>`).join("")}</div>
+    <div class="cart-totals">
+      <div class="t-row" style="color:var(--muted);font-size:12.5px">السعر النهائي الإجمالي${totalsRows.length > 1 ? " (مقسّم حسب عملة كل منتج)" : ""}</div>
+      ${totalsRows.map((c) => `<div class="t-row big"><span>${CUR_AR[c]} <small style="color:var(--muted);font-weight:400">(${t[c].count} منتج)</small></span><span>${money(t[c].sum, c)}</span></div>`).join("")}
+    </div>
     <div class="cart-totals">
       <label class="label" for="cNotes">ملاحظات (اختياري)</label>
       <textarea class="field" id="cNotes" rows="2" maxlength="500" placeholder="مكان التوصيل، وقت مفضّل..."></textarea>
@@ -514,7 +544,6 @@ function renderCart() {
       <button class="btn btn-wa" style="width:100%;margin-top:10px" id="checkoutBtn">📲 إتمام الطلب عبر واتساب</button>
       ${SETTINGS.deliveryNote ? `<p class="delivery-note">${esc(SETTINGS.deliveryNote)}</p>` : ""}
     </div>`;
-  window.scrollTo(0, 0);
 }
 
 /* ---------- Toast / Footer / Theme ---------- */
