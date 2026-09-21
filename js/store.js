@@ -70,20 +70,37 @@ function applyTheme(theme) {
 /* ---------- تنسيق الأسعار ---------- */
 const fmtN = (v) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(v || 0);
 function money(v, c) {
-  const num = parseFloat(v) || 0;
-  if (c === "SYP") return new Intl.NumberFormat("en-US").format(Math.round(num)) + " ل.س";
-  return fmtN(num) + " " + (c === "USD" ? "$" : c === "TRY" ? "₺" : c);
+  const n = typeof v === "number" ? (isFinite(v) ? v : 0) : num(v);
+  if (c === "SYP") return new Intl.NumberFormat("en-US").format(Math.round(n)) + " ل.س";
+  return fmtN(Math.round(n * 100) / 100) + " " + (c === "USD" ? "$" : c === "TRY" ? "₺" : c);
 }
 const catName = (s) => (CATEGORIES.find((c) => c.slug === s) || {}).name || "";
 const availText = (a) => (a === "in" ? "متوفر" : a === "limited" ? "كمية محدودة" : "غير متوفر");
 const isNew = (p) => Date.now() - (p.created || 0) < 48 * HOUR;
 const byId = (id) => PRODUCTS.find((p) => p.id === id);
+// تحويل أي سعر (رقم أو نص مثل "14,000" أو "١٫٥") إلى رقم صحيح
+function num(v) {
+  if (typeof v === "number") return isFinite(v) && v > 0 ? v : 0;
+  let s = String(v ?? "").trim();
+  if (!s) return 0;
+  s = s.replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x0660 + 0x30)).replace(/[٫٬]/g, ",").replace(/[^\d.,]/g, "");
+  const lastDot = s.lastIndexOf("."), lastCom = s.lastIndexOf(",");
+  if (lastDot !== -1 && lastCom !== -1) s = lastDot > lastCom ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
+  else if (lastCom !== -1) { const after = s.length - lastCom - 1; s = (after === 3 || s.split(",").length > 2) ? s.replace(/,/g, "") : s.replace(",", "."); }
+  else if (lastDot !== -1) { const after = s.length - lastDot - 1; if (s.split(".").length > 2 || (after === 3 && lastDot > 0 && s.length >= 5)) s = s.replace(/\./g, ""); }
+  const n = parseFloat(s);
+  return isFinite(n) && n > 0 ? n : 0;
+}
+const price = (prices, c) => num(prices?.[c]);
+/** العملات التي تُعرض للزبون (لها سعر وغير مخفية) */
 function visibleCurs(p) {
   const sc = p.showCurrencies || {};
-  return CUR.filter(([c]) => sc[c] !== false && (p.prices?.[c] || 0) > 0).map(([c]) => c);
+  return CUR.filter(([c]) => sc[c] !== false && price(p.prices, c) > 0).map(([c]) => c);
 }
+/** كل العملات التي لها سعر (بغضّ النظر عن الإخفاء) */
+const pricedCurs = (prices) => CUR.map(([c]) => c).filter((c) => price(prices, c) > 0);
 function hasOffer(p) {
-  return !!(p.oldPrices && (p.oldPrices[PRIMARY] || 0) > (p.prices[PRIMARY] || 0));
+  return !!(p.oldPrices && price(p.oldPrices, PRIMARY) > price(p.prices, PRIMARY));
 }
 /* ---------- المجموعات: منتجات تشارك نفس اسم المجموعة تُعامل كأنواع لبعضها ---------- */
 const groupKey = (p) => String(p.group || "").trim().toLowerCase();
@@ -125,9 +142,11 @@ function resolveItem(key) {
   const vi = m[2] != null ? +m[2] : -1;
   const v = vi >= 0 && p.variants && p.variants[vi] ? p.variants[vi] : null;
   if (vi >= 0 && !v) return null;
+  // النوع يرث أسعار المنتج إن لم يكن له أي سعر خاص (> 0)
+  const vPrices = v && v.prices && pricedCurs(v.prices).length ? v.prices : p.prices;
   return {
     p, vi, v,
-    prices: v?.prices || p.prices,
+    prices: vPrices,
     availability: v?.availability || p.availability,
     name: v ? `${p.name} — ${v.name || "نوع " + (vi + 1)}` : p.name,
     image: v?.image || p.images[0] || "",
@@ -154,18 +173,24 @@ function cardStep(id, d) {
   });
 }
 /* ---------- حساب الإجمالي (بدقة، بدون أخطاء الفاصلة العشرية) ---------- */
-// كل منتج يُحاسب بعملة واحدة: الدولار إن كان مرئياً، وإلا أول عملة مرئية له (تركي ثم سوري)
+// كل منتج يُحاسب بعملة واحدة:
+//  1) الدولار إن كان مرئياً وله سعر   2) أول عملة مرئية لها سعر (تركي ثم سوري)
+//  3) إن كانت كل العملات مخفية بالخطأ → أي عملة لها سعر (لا يسقط منتج من الإجمالي أبداً)
 function billingCur(it) {
   const vis = visibleCurs({ prices: it.prices, showCurrencies: it.showCurrencies });
-  return vis.includes(PRIMARY) ? PRIMARY : vis[0] || null;
+  if (vis.includes(PRIMARY)) return PRIMARY;
+  if (vis.length) return vis[0];
+  const any = pricedCurs(it.prices);
+  return any.includes(PRIMARY) ? PRIMARY : any[0] || null;
 }
 // العمليات بالقروش (×100) لتجنّب مثل 0.1+0.2=0.30000000000000004
-const toCents = (v) => Math.round((parseFloat(v) || 0) * 100);
+const toCents = (v) => Math.round(num(v) * 100);
 const fromCents = (c) => c / 100;
 function lineTotal(it, q) {
   const c = billingCur(it);
   if (!c) return null;
-  return { cur: c, unit: fromCents(toCents(it.prices[c])), total: fromCents(toCents(it.prices[c]) * q) };
+  const unitCents = toCents(it.prices[c]);
+  return { cur: c, unit: fromCents(unitCents), total: fromCents(unitCents * q) };
 }
 /** يُرجع { USD:{sum,count}, TRY:{...}, SYP:{...} } — كل عملة تجمع منتجاتها فقط */
 function cartTotals(src) {
@@ -174,8 +199,8 @@ function cartTotals(src) {
   for (const key in src) {
     const it = resolveItem(key); if (!it) continue;
     const q = parseInt(src[key], 10) || 0; if (q <= 0) continue;
-    const c = billingCur(it); if (!c) continue;
-    cents[c] += toCents(it.prices[c]) * q; count[c] += 1;
+    const lt = lineTotal(it, q); if (!lt) continue;
+    cents[lt.cur] += Math.round(lt.total * 100); count[lt.cur] += 1;
   }
   const out = {};
   for (const c of Object.keys(cents)) out[c] = { sum: fromCents(cents[c]), count: count[c] };
@@ -345,7 +370,7 @@ function getList(mode, slug) {
     const q = state.q.trim().toLowerCase();
     list = list.filter((p) => (p.name || "").toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q) || (p.group || "").toLowerCase().includes(q) || (p.variants || []).some((v) => (v.name || "").toLowerCase().includes(q)));
   }
-  const pr = (p) => p.prices[PRIMARY] || 0;
+  const pr = (p) => price(p.prices, PRIMARY);
   if (state.sort === "price_asc") list.sort((a, b) => pr(a) - pr(b));
   else if (state.sort === "price_desc") list.sort((a, b) => pr(b) - pr(a));
   else if (state.sort === "views") list.sort((a, b) => (b.views || 0) - (a.views || 0));
@@ -421,7 +446,7 @@ let gImg = 0, curVariant = -1, pQ = 1;
 const curProductId = () => { const m = location.hash.match(/product\/(\d+)/); return m ? +m[1] : null; };
 function priceRows(prices, sc, oldPrices) {
   const vis = visibleCurs({ prices, showCurrencies: sc });
-  return CUR.filter(([c]) => vis.includes(c)).map(([c]) => `<div class="pr"><span class="cur">${CUR_LABEL[c]}</span><span class="val">${money(prices[c], c)}${oldPrices && (oldPrices[c] || 0) > (prices[c] || 0) ? `<s>${money(oldPrices[c], c)}</s>` : ""}</span></div>`).join("");
+  return CUR.filter(([c]) => vis.includes(c)).map(([c]) => `<div class="pr"><span class="cur">${CUR_LABEL[c]}</span><span class="val">${money(prices[c], c)}${oldPrices && price(oldPrices, c) > price(prices, c) ? `<s>${money(oldPrices[c], c)}</s>` : ""}</span></div>`).join("");
 }
 function similarHTML(p) {
   const g = groupKey(p);
