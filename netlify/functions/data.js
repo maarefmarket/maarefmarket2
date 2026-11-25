@@ -84,8 +84,8 @@ export default async (req, context) => {
       if(adminRequested){const denied=requireAuth(req);if(denied)return denied;}
       if(mode&&!adminRequested)return json({settings:{storeName:data.settings.storeName,theme:data.settings.theme,...status},banners:[],categories:[],products:[]},503,{...cors,"Retry-After":"60"});
       const etag = `"${version}"`;
-      if (req.headers.get("if-none-match") === etag) {
-        return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": "no-cache", ...cors } });
+      if (!adminRequested && !mode && req.headers.get("if-none-match") === etag) {
+        return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": "no-store", ...cors, Vary: "Authorization, Origin" } });
       }
       return json(withVersion(data, version), 200, { ...cors, ETag: etag, "Cache-Control": "no-store", Vary: "Authorization, Origin" });
     } catch (e) {
