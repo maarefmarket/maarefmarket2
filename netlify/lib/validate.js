@@ -1,4 +1,4 @@
-import { roundPrice, normalizeCatalogPricing, normalizeRates } from "../../js/money.js";
+import { decimal, normalizeCatalogPricing, normalizeRates } from "../../js/money.js";
 /**
  * تحقّق وتنظيف عميق لبيانات المتجر قبل حفظها.
  * يمنع حقن روابط javascript:, النصوص العملاقة, والأنواع الخاطئة.
@@ -80,7 +80,7 @@ export function digits(v, max = 20) {
 function prices(v) {
   const p = v && typeof v === "object" ? v : {};
   const out = {};
-  for (const c of CURS) out[c] = roundPrice(p[c],c);
+  for (const c of CURS) out[c] = Math.min(1e12,decimal(p[c]));
   return out;
 }
 
