@@ -50,6 +50,20 @@
   </div>
   <div class="viewer-footer"><span id="viewerCount" aria-live="polite" dir="ltr"></span><a id="viewerLink" class="btn btn-outline" target="_blank" rel="noopener noreferrer" hidden>فتح رابط الإعلان</a><button type="button" id="viewerProduct" class="btn btn-primary" hidden>تفاصيل المنتج</button></div>
 </dialog>
-<script src="js/store.js"></script>
+<dialog id="feedbackDialog" class="feedback-dialog" aria-labelledby="feedbackTitle">
+  <form id="feedbackForm">
+    <div class="feedback-head"><span aria-hidden="true">💬</span><h2 id="feedbackTitle">رأيك يساعدنا على التطوير</h2></div>
+    <p>هل واجهتك مشكلة أثناء تصفح المتجر؟ هل لديك اقتراح لتحسينه؟</p>
+    <p class="feedback-privacy">رأيك اختياري ومجهول الاسم. نحفظ نص الرأي والمنتجات المحددة وتاريخ الإرسال فقط في سجل الإدارة. لا تكتب اسمك أو رقم هاتفك أو أي معلومات شخصية.</p>
+    <label class="label" for="feedbackText">ملاحظتك أو اقتراحك</label>
+    <textarea class="field" id="feedbackText" rows="4" maxlength="1500" placeholder="اكتب رأيك هنا..."></textarea>
+    <div id="feedbackError" class="err-msg" role="status" aria-live="polite"></div>
+    <div class="feedback-actions">
+      <button id="feedbackSend" class="btn btn-primary" type="submit">إرسال الاقتراح والمتابعة</button>
+      <button id="feedbackSkip" class="btn btn-outline" type="button">تخطي والطلب عبر واتساب</button>
+    </div>
+  </form>
+</dialog>
+<script type="module" src="js/store.js"></script>
 </body>
 </html>

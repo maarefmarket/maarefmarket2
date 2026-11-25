@@ -54,6 +54,7 @@
         <button class="tab" data-tab="rates">💱 أسعار الصرف</button>
         <button class="tab" data-tab="colors">🎨 الألوان</button>
         <button class="tab" data-tab="settings">⚙️ الإعدادات</button>
+        <button class="tab" data-tab="feedback">💬 آراء الزبائن</button>
         <button class="tab" data-tab="backup">💼 نسخ احتياطي</button>
       </div>
     </div>
@@ -114,13 +115,7 @@
     <!-- أسعار الصرف -->
     <section id="tab-rates" class="tab-pane" style="display:none">
       <div class="section-head"><div><h2>💱 أسعار الصرف المركزية</h2><p>حدّد أسعار التحويل وطبّقها على جميع المنتجات دفعة واحدة.</p></div></div>
-      <div class="card">
-        <h3>⚙️ العملة المرجعية</h3>
-        <div class="hint" style="margin-bottom:8px">العملة التي تُدخل بها الأسعار أصلاً (لن تتغيّر عند التحويل).</div>
-        <select id="rBaseCur" class="field" style="max-width:300px">
-          <option value="USD">الدولار ($)</option><option value="TRY">التركي (₺)</option><option value="SYP">السوري (ل.س)</option>
-        </select>
-      </div>
+      <div class="card"><h3>العملة الأساسية: الدولار الأمريكي (USD)</h3><p class="hint">سعر الدولار هو المرجع الثابت. تتحول الأسعار الأخرى عند الحفظ، بما فيها أسعار العروض والأنواع.</p></div>
       <div class="card">
         <h3>💱 أسعار التحويل</h3>
         <div class="row cols-2">
@@ -130,7 +125,7 @@
       </div>
       <div class="card accent">
         <h3>⚠️ تطبيق على جميع المنتجات</h3>
-        <p style="margin:0 0 10px;font-size:13.5px;line-height:1.8">ستُعاد حسابة أسعار العملتين الأخريين لـ <strong id="rCountLabel">كلّ</strong> المنتجات اعتماداً على سعرها بالعملة المرجعية. الليرة السورية تُقرَّب لأقرب عدد صحيح.</p>
+        <p style="margin:0 0 10px;font-size:13.5px;line-height:1.8">ستُعاد حسابة أسعار العملتين الأخريين لـ <strong id="rCountLabel">كلّ</strong> المنتجات اعتماداً على سعرها بالعملة المرجعية. السوري لأقرب 10 ليرات، والتركي لأقرب 0.5 ليرة، والدولار لأقرب 0.01. عند المنتصف يكون التقريب للأعلى. يتم تحديث الأسعار تلقائياً عند الحفظ؛ ويمكن معاينتها محلياً أولاً.</p>
         <button class="btn btn-primary" data-action="apply-rates">🔄 تطبيق أسعار الصرف على جميع المنتجات</button>
       </div>
       <div class="card"><h3>👁 معاينة</h3><div id="ratesPreview" style="line-height:2;font-size:14px"></div></div>
@@ -234,6 +229,18 @@
     </section>
 
     <!-- النسخ الاحتياطي -->
+    <section id="tab-feedback" class="tab-pane" style="display:none">
+      <div class="section-head"><div><h2>💬 آراء الزبائن</h2><p>سجل الآراء والاقتراحات والمشكلات دون اسم أو رقم هاتف. المنتجات مرفقة كما كانت في الطلب المزمع، وليست دليلاً على إرساله في واتساب.</p></div></div>
+      <div class="card">
+        <div class="row cols-2">
+          <div><label class="label" for="feedbackMonth">شهر السجل</label><input id="feedbackMonth" class="field" type="month"></div>
+          <div><button id="refreshFeedback" class="btn btn-primary" type="button">تحديث السجل</button><p id="feedbackCount" class="hint" role="status"></p></div>
+        </div>
+        <p class="hint mt">توقيت العرض: دمشق (Asia/Damascus). تُحفظ أوقات الاستلام على الخادم بالثانية.</p>
+        <div id="feedbackList" class="feedback-list"></div>
+        <button id="moreFeedback" class="btn btn-outline mt" type="button" hidden>عرض المزيد</button>
+      </div>
+    </section>
     <section id="tab-backup" class="tab-pane" style="display:none">
       <div class="section-head"><div><h2>💼 النسخ الاحتياطي</h2><p>احفظ أو استورد بيانات المتجر.</p></div></div>
       <div class="card">
@@ -293,6 +300,7 @@
       <div><label class="label">السعر القديم (₺)</label><input id="mpOldTRY" type="text" inputmode="decimal" class="field" placeholder="اختياري"></div>
       <div><label class="label">السعر القديم (ل.س)</label><input id="mpOldSYP" type="text" inputmode="decimal" class="field" placeholder="اختياري"></div>
     </div>
+    <div class="hint mt">تُحسب أسعار التركي والسوري من الدولار عند ضبط أسعار الصرف. يمكن التحكم بظهورها دون تغيير الحساب.</div>
     <div class="hint mt">💡 إن كان السعر القديم أعلى من الحالي تظهر شارة <strong>عرض</strong> مع السعر المشطوب.</div>
     <div class="row cols-2 mt">
       <div><label class="label">الحالة *</label>
@@ -399,6 +407,6 @@
 </div>
 
 <div id="toast" role="status"></div>
-<script src="js/admin.js"></script>
+<script type="module" src="js/admin.js"></script>
 </body>
 </html>

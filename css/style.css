@@ -274,3 +274,14 @@ html.maintenance-mode #app{min-height:100vh;min-height:100dvh;display:grid;place
 #bannerBox,.viewer-stage img{touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}
 #bannerBox .banner-slide{position:relative;min-height:inherit;overflow:hidden}
 #bannerBox img,.viewer-stage img{-webkit-user-drag:none}
+
+/* Optional feedback before checkout */
+.feedback-dialog{width:min(92vw,480px);max-height:90vh;max-height:90dvh;margin:auto;padding:22px;border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--fg);box-shadow:var(--shadow);overflow:auto}
+.feedback-dialog::backdrop{background:rgba(14,21,35,.65)}
+.feedback-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.feedback-head span{font-size:28px}.feedback-head h2{font-size:19px;color:var(--brand)}
+.feedback-dialog p{margin-bottom:12px;font-size:14px;line-height:1.8}
+.feedback-privacy{padding:10px 12px;background:var(--elevated);border-radius:10px;color:var(--muted);font-size:12px!important}
+.feedback-dialog textarea{width:100%;resize:vertical;min-height:100px}
+.feedback-actions{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+html:has(.feedback-dialog[open]){overflow:hidden}

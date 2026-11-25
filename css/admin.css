@@ -206,3 +206,12 @@ td .row-actions{display:flex;gap:4px;flex-wrap:wrap}
   .modal{padding:16px}
   th,td{padding:8px;font-size:12.5px}
 }
+
+/* Private feedback history */
+.feedback-list{display:grid;gap:12px;margin-top:14px}
+.feedback-record{border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--surface)}
+.feedback-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;color:var(--muted);font-size:12px}
+.feedback-text{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;margin:12px 0}
+.feedback-record summary{cursor:pointer;color:var(--brand);font-weight:700}
+.feedback-record ul{padding-inline-start:22px;margin:8px 0;line-height:1.9;overflow-wrap:anywhere}
+#moreFeedback[hidden]{display:none}
