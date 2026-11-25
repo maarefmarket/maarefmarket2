@@ -32,6 +32,15 @@ export function noContent(extra = {}) {
 /* ------------------------------------------------------------------ */
 /* Same-origin / CORS                                                   */
 /* ------------------------------------------------------------------ */
+// Preview deployments must never mutate shared site-wide Blobs or send real orders.
+export function isProductionRequest(req) {
+  try {
+    const origin = new URL(req.url).origin;
+    const canonical = new URL(process.env.URL || "https://maarefmarket.netlify.app").origin;
+    return origin === canonical || origin === "https://maarefmarket.netlify.app";
+  } catch { return false; }
+}
+
 export function siteOrigins(req) {
   const set = new Set();
   try { set.add(new URL(req.url).origin); } catch {}
@@ -39,8 +48,8 @@ export function siteOrigins(req) {
     const v = process.env[k];
     if (v) { try { set.add(new URL(v).origin); } catch {} }
   }
-  // بيئة التطوير المحلية
-  set.add("http://localhost:8888");
+  // Local development origin is accepted only for a local request.
+  if (new URL(req.url).hostname === "localhost") set.add("http://localhost:8888");
   return set;
 }
 
@@ -173,8 +182,9 @@ export function bearer(req) {
 
 /** يُرجع null إذا كانت الجلسة صالحة، أو Response خطأ جاهزة */
 export function requireAuth(req) {
+  if (!isProductionRequest(req)) return json({ error: "النسخة التجريبية للقراءة فقط" }, 403, corsHeaders(req));
   const st = adminPasswordStatus();
-  if (!st.ok) return json({ error: st.error }, 500, corsHeaders(req));
+  if (!st.ok) return json({ error: "إعدادات الإدارة غير متاحة" }, 503, corsHeaders(req));
   if (!isSameOrigin(req, false)) return json({ error: "مصدر الطلب غير مسموح" }, 403, corsHeaders(req));
   const session = verifyToken(bearer(req));
   if (!session) return json({ error: "الجلسة غير صالحة أو منتهية — سجّل الدخول مجدداً", code: "UNAUTHORIZED" }, 401, corsHeaders(req));
