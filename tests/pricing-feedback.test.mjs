@@ -16,13 +16,13 @@ const catalog={settings:{storeName:"Example",whatsapps:["123456789"],rates:{USD_
 test("exact rounding and formatting in three currencies",()=>{
   assert.equal(money.roundPrice(1.005,"USD"),1.01);
   assert.equal(money.roundPrice(2.675,"USD"),2.68);
-  assert.deepEqual([10.24,10.25,10.74,10.75].map(x=>money.roundPrice(x,"TRY")),[10,10.5,10.5,11]);
+  assert.deepEqual([0,0.01,2.49,5,7.49,7.5,12.49,12.5,17.5,49.99].map(x=>money.roundPrice(x,"TRY")),[0,5,5,5,5,10,10,15,20,50]);
   assert.deepEqual([14.99,15,24.99,25,34.9,35].map(x=>money.roundPrice(x,"SYP")),[10,20,20,30,30,40]);
-  assert.equal(money.convertUSD(1.25,33,"TRY"),41.5);
+  assert.equal(money.convertUSD(1.25,33,"TRY"),40);
   assert.equal(money.convertUSD(.35,70,"SYP"),20);
   assert.equal(money.convertUSD(.25,100,"SYP"),30);
   assert.equal(money.formatMoney(1,"USD"),"1.00 $");
-  assert.equal(money.formatMoney(2,"TRY"),"2.0 ₺");
+  assert.equal(money.formatMoney(2,"TRY"),"5 ₺");
   assert.equal(money.formatMoney(30,"SYP"),"30 ل.س");
 });
 test("Arabic decimals, grouping and rejected malformed numbers",()=>{
@@ -31,9 +31,9 @@ test("Arabic decimals, grouping and rejected malformed numbers",()=>{
 test("USD canonical pricing includes offers, variants, and legacy prices",()=>{
   const d=sanitizeStore(catalog);
   assert.equal(d.settings.baseCurrency,"USD");
-  assert.deepEqual(d.products[0].prices,{USD:1.25,TRY:41.5,SYP:17500});
-  assert.equal(d.products[0].oldPrices.TRY,66);
-  assert.equal(d.products[0].variants[0].prices.TRY,58);
+  assert.deepEqual(d.products[0].prices,{USD:1.25,TRY:40,SYP:17500});
+  assert.equal(d.products[0].oldPrices.TRY,65);
+  assert.equal(d.products[0].variants[0].prices.TRY,60);
   assert.equal(d.products[1].prices.USD,2);
   const prior=d.settings.rates;d.settings.rates={USD_TRY:40,USD_SYP:15000};
   money.normalizeCatalogPricing(d,prior);
@@ -44,10 +44,10 @@ test("USD canonical pricing includes offers, variants, and legacy prices",()=>{
 });
 test("order totals are exact, use rounded unit prices and respect currency visibility",()=>{
   const o=buildOrder(catalog,{items:[{id:1,variant:0,qty:3},{id:2,qty:2}]});
-  assert.equal(o.items[0].total,174);assert.equal(o.items[1].total,56000);
-  assert.match(o.text,/174\.0\u00a0₺/);
+  assert.equal(o.items[0].total,180);assert.equal(o.items[1].total,56000);
+  assert.match(o.text,/180\u00a0₺/);
   assert.equal(money.lineAmount({USD:.1},{},3).total,.3);
-  assert.equal(money.lineAmount({TRY:10.5},{},3).total,31.5);
+  assert.equal(money.lineAmount({TRY:10.5},{},3).total,30);
   assert.equal(money.lineAmount({SYP:20},{},3).total,60);
   assert.throws(()=>money.convertUSD(1e12,2,"TRY"),RangeError);
 });
@@ -196,14 +196,14 @@ test("final totals represent the entire basket in each currency, even hidden cur
   for(const msg of [wa,tg]){
     const final=msg.split("السعر النهائي الإجمالي:")[1];
     assert.ok(final.includes("119,000\u00a0ل.س"));
-    assert.ok(final.includes("281.0\u00a0₺"));
+    assert.ok(final.includes("275\u00a0₺"));
     assert.ok(final.includes("8.50\u00a0$"));
     assert.equal((final.match(/بالسوري|بالتركي|بالدولار/g)||[]).length,3);
     assert.doesNotMatch(final,/84,000|2\.50/);
   }
   const variant=buildOrder(catalog,{items:[{id:1,variant:0,qty:3},{id:2,qty:2}]}).text.split("السعر النهائي الإجمالي:")[1];
   assert.ok(variant.includes("129,500\u00a0ل.س"));
-  assert.ok(variant.includes("306.0\u00a0₺"));
+  assert.ok(variant.includes("310\u00a0₺"));
   assert.ok(variant.includes("9.25\u00a0$"));
 });
 test("unavailable currency is not misrepresented as a partial or zero total",()=>{
@@ -211,7 +211,28 @@ test("unavailable currency is not misrepresented as a partial or zero total",()=
   const before=JSON.stringify(rows);
   const totals=orderFormat.formatGrandTotals(rows,{USD_TRY:33});
   assert.ok(totals.includes("بالسوري: غير متاح"));
-  assert.ok(totals.includes("165.0\u00a0₺"));
+  assert.ok(totals.includes("165\u00a0₺"));
   assert.ok(totals.includes("5.00\u00a0$"));
   assert.equal(JSON.stringify(rows),before);
+});
+
+test("TRY prices, offers, variants and totals are whole multiples of five without changing USD or SYP",()=>{
+  const before=JSON.stringify(catalog);
+  const d=sanitizeStore(catalog);
+  for(const p of d.products)for(const prices of [p.prices,p.oldPrices,...(p.variants||[]).map(v=>v.prices)].filter(Boolean)){
+    assert.equal(prices.TRY%5,0);
+  }
+  assert.equal(d.products[0].prices.USD,1.25);
+  assert.equal(d.products[0].prices.SYP,17500);
+  assert.equal(JSON.stringify(catalog),before);
+  assert.equal(money.convertUSD(.01,33,"TRY"),5);
+  assert.equal(money.formatMoney(1234.5,"TRY"),"1235 ₺");
+  assert.equal(money.formatMoney(0,"TRY"),"0 ₺");
+  assert.equal(money.lineAmount({TRY:5},{},3).total,15);
+  for(let n=0;n<=10000;n+=0.25){
+    const price=money.roundPrice(n,"TRY");
+    assert.equal(price%5,0);
+    assert.equal(money.roundPrice(price,"TRY"),price);
+    assert.ok(/^\d*[05]$/.test(money.formatAmount(price,"TRY")));
+  }
 });
