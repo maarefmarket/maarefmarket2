@@ -155,7 +155,7 @@ function loadCart() {
   if (typeof cart !== "object" || cart === null || Array.isArray(cart)) cart = {};
   try { localStorage.removeItem("ck_cart"); } catch {}
 }
-function saveCart() { try { sessionStorage.setItem("ck_cart", JSON.stringify(cart)); } catch {} updateCartCount(); }
+function saveCart(changedKey) { try { sessionStorage.setItem("ck_cart", JSON.stringify(cart)); } catch {} updateCartCount(changedKey); }
 function pruneCart() {
   let changed = false;
   for (const k of Object.keys(cart)) {
@@ -191,9 +191,9 @@ function addToCart(id, qty, vi) {
   const it = resolveItem(key);
   if (!it || it.availability === "out") { toast("غير متوفر", "err"); return; }
   cart[key] = Math.min(999, (cart[key] || 0) + qty);
-  saveCart(); toast("أُضيف إلى السلة");
+  saveCart(key); toast("أُضيف إلى السلة");
 }
-function setQty(key, qty) { if (qty <= 0) delete cart[key]; else cart[key] = Math.min(999, qty); saveCart(); }
+function setQty(key, qty) { if (qty <= 0) delete cart[key]; else cart[key] = Math.min(999, qty); saveCart(key); }
 function cardStep(id, d) {
   const p = byId(id); if (!p) return;
   if (p.availability === "out") { toast("المنتج غير متوفر", "err"); return; }
@@ -216,17 +216,18 @@ function cartTotals(src=cart){
   }
   return Object.fromEntries(CUR.map(([c])=>[c,{sum:fromTicks(ticks[c],c),count:count[c]}]));
 }
-function updateCartCount(){
+function updateCartCount(changedKey){
   const n=cartQty(),el=$("cartCount");
   el.textContent=n;el.style.display=n?"grid":"none";
-  document.querySelectorAll("[data-qty-for]").forEach(box=>{
+  const selector=changedKey===undefined?"[data-qty-for]":`[data-qty-for="${String(changedKey).split("__v")[0].replace(/[^0-9]/g,"")}"]`;
+  document.querySelectorAll(selector).forEach(box=>{
     const id=box.dataset.qtyFor,q=cart[id]||0;
     box.querySelector(".qval").textContent=q;
     box.querySelector(".qminus").disabled=q<=0;
     const plus=box.querySelector(".qplus");if(plus)plus.disabled=q>=999;
     const card=box.closest(".card");
     if(card){
-      const lt=q?lineTotal(resolveItem(id),q):null;
+      const it=resolveItem(id),lt=q&&it?lineTotal(it,q):null;
       const total=card.querySelector(".card-line-total");
       if(total)total.textContent=lt?"الإجمالي: "+money(lt.total,lt.cur):"";
       card.classList.toggle("selected",q>0);
