@@ -30,7 +30,7 @@
     </button>
     <button class="icon-btn" id="themeBtn" aria-label="تبديل الوضع الليلي">🌙</button>
   </div>
-  <div class="container header-links"><nav class="header-categories" aria-label="الأقسام"><div id="chipBar" class="chipbar"></div></nav><button type="button" id="generalFeedbackBtn" class="general-feedback-btn" aria-haspopup="dialog" aria-controls="feedbackDialog" disabled><span aria-hidden="true">💬</span> رأيك يهمنا</button></div>
+  <nav class="container" style="padding:0" aria-label="الأقسام"><div id="chipBar" class="chipbar"></div></nav>
 </header>
 
 <main class="container" id="app">
@@ -40,6 +40,7 @@
 </main>
 
 <div id="shopDock" class="shop-dock" hidden>
+  <div class="feedback-float-row"><button type="button" id="generalFeedbackBtn" class="general-feedback-btn" aria-haspopup="dialog" aria-controls="feedbackDialog" disabled><span aria-hidden="true">💬</span> رأيك يهمنا</button></div>
   <div id="cartSummary" class="cart-summary" hidden>
     <div class="summary-info"><strong id="summaryCount"></strong><span id="summaryTotal" dir="auto"></span></div>
     <button class="btn btn-outline" type="button" data-nav="cart">السلة</button>
