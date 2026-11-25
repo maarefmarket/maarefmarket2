@@ -54,6 +54,7 @@
         <button class="tab" data-tab="rates">💱 أسعار الصرف</button>
         <button class="tab" data-tab="colors">🎨 الألوان</button>
         <button class="tab" data-tab="settings">⚙️ الإعدادات</button>
+        <button class="tab" data-tab="feedback">💬 آراء الزبائن</button>
         <button class="tab" data-tab="backup">💼 نسخ احتياطي</button>
       </div>
     </div>
@@ -228,6 +229,18 @@
     </section>
 
     <!-- النسخ الاحتياطي -->
+    <section id="tab-feedback" class="tab-pane" style="display:none">
+      <div class="section-head"><div><h2>💬 آراء الزبائن</h2><p>سجل الآراء والاقتراحات والمشكلات دون اسم أو رقم هاتف. المنتجات مرفقة كما كانت في الطلب المزمع، وليست دليلاً على إرساله في واتساب.</p></div></div>
+      <div class="card">
+        <div class="row cols-2">
+          <div><label class="label" for="feedbackMonth">شهر السجل</label><input id="feedbackMonth" class="field" type="month"></div>
+          <div><button id="refreshFeedback" class="btn btn-primary" type="button">تحديث السجل</button><p id="feedbackCount" class="hint" role="status"></p></div>
+        </div>
+        <p class="hint mt">توقيت العرض: دمشق (Asia/Damascus). تُحفظ أوقات الاستلام على الخادم بالثانية.</p>
+        <div id="feedbackList" class="feedback-list"></div>
+        <button id="moreFeedback" class="btn btn-outline mt" type="button" hidden>عرض المزيد</button>
+      </div>
+    </section>
     <section id="tab-backup" class="tab-pane" style="display:none">
       <div class="section-head"><div><h2>💼 النسخ الاحتياطي</h2><p>احفظ أو استورد بيانات المتجر.</p></div></div>
       <div class="card">
@@ -287,6 +300,7 @@
       <div><label class="label">السعر القديم (₺)</label><input id="mpOldTRY" type="text" inputmode="decimal" class="field" placeholder="اختياري"></div>
       <div><label class="label">السعر القديم (ل.س)</label><input id="mpOldSYP" type="text" inputmode="decimal" class="field" placeholder="اختياري"></div>
     </div>
+    <div class="hint mt">تُحسب أسعار التركي والسوري من الدولار عند ضبط أسعار الصرف. يمكن التحكم بظهورها دون تغيير الحساب.</div>
     <div class="hint mt">💡 إن كان السعر القديم أعلى من الحالي تظهر شارة <strong>عرض</strong> مع السعر المشطوب.</div>
     <div class="row cols-2 mt">
       <div><label class="label">الحالة *</label>
