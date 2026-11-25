@@ -1,9 +1,9 @@
 // Shared decimal arithmetic for storefront, admin and server.
 // Rounding: nearest monetary tick, with positive ties rounded up.
 export const CURRENCIES=["USD","TRY","SYP"];
-const SCALE={USD:100,TRY:2,SYP:0.1};
+const SCALE={USD:100,TRY:0.2,SYP:0.1};
 const MAX=1e12;
-const formatters=Object.fromEntries(CURRENCIES.map(c=>[c,new Intl.NumberFormat("en-US",{minimumFractionDigits:c==="USD"?2:c==="TRY"?1:0,maximumFractionDigits:c==="USD"?2:c==="TRY"?1:0})]));
+const formatters=Object.fromEntries(CURRENCIES.map(c=>[c,new Intl.NumberFormat("en-US",{minimumFractionDigits:c==="USD"?2:0,maximumFractionDigits:c==="USD"?2:0,useGrouping:c!=="TRY"})]));
 export function decimal(value){
   if(typeof value==="number")return Number.isFinite(value)&&value>=0?value:0;
   let s=String(value??"").trim().replace(/[٠-٩۰-۹]/g,d=>String(d.charCodeAt(0)-(d.charCodeAt(0)>=0x06f0?0x06f0:0x0660))).replace(/٬/g,",").replace(/٫/g,".");
@@ -22,11 +22,13 @@ function fraction(n){
 function roundFraction(n,d){return (2n*n+d)/(2n*d);}
 function ticksFrom(n,c,rate=1){
   const [a,b]=fraction(n),[x,y]=fraction(rate);
-  const top=a*x*BigInt(c==="USD"?100:c==="TRY"?2:1);
-  const bottom=b*y*BigInt(c==="SYP"?10:1);
-  return Number(roundFraction(top,bottom));
+  const top=a*x*BigInt(c==="USD"?100:1);
+  const bottom=b*y*BigInt(c==="SYP"?10:c==="TRY"?5:1);
+  const ticks=Number(roundFraction(top,bottom));
+  // A positive TRY price must not become a free or unavailable item.
+  return c==="TRY"&&top>0n?Math.max(1,ticks):ticks;
 }
-export function fromTicks(t,c){return c==="SYP"?t*10:t/SCALE[c];}
+export function fromTicks(t,c){return c==="SYP"?t*10:c==="TRY"?t*5:t/SCALE[c];}
 export function priceTicks(value,c){return ticksFrom(Math.min(MAX,decimal(value)),c);}
 export function roundPrice(value,c){return fromTicks(priceTicks(value,c),c);}
 export function convertUSD(value,rate,c){
@@ -36,7 +38,7 @@ export function convertUSD(value,rate,c){
   if(a*x>BigInt(MAX)*b*y)throw new RangeError("Converted price exceeds supported range");
   return fromTicks(ticksFrom(usd,c,r),c);
 }
-export function formatAmount(value,c){return formatters[c].format(value||0);}
+export function formatAmount(value,c){return formatters[c].format(c==="TRY"?roundPrice(value,c):value||0);}
 export function formatMoney(value,c){return formatAmount(value,c)+" "+({USD:"$",TRY:"₺",SYP:"ل.س"}[c]);}
 export function normalizeRates(raw={}){
   raw=raw&&typeof raw==="object"?raw:{};
