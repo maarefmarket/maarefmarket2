@@ -268,6 +268,7 @@ function updateShopDock(){
     if(on)button.setAttribute("aria-current","page");else button.removeAttribute("aria-current");
   });
   const clear=$("clearSearch");if(clear)clear.hidden=!$("searchInput").value;
+  $("generalFeedbackBtn").disabled=!visible;
   document.documentElement.classList.toggle("shop-dock-active",visible);
   if(dock.getBoundingClientRect&&document.documentElement.style.setProperty)document.documentElement.style.setProperty("--dock-height",Math.ceil(dock.getBoundingClientRect().height)+"px");
 }
@@ -370,7 +371,7 @@ function checkout() {
 }
 
 /* ---------- رأي الزبون الاختياري ---------- */
-let feedbackPending=null,unsentFeedbackDraft="";
+let feedbackPending=null,unsentFeedbackDraft="",generalFeedbackDraft="";
 function isCurrentFeedback(pending){
   return !pending||(feedbackPending===pending&&!pending.controller.signal.aborted);
 }
@@ -378,7 +379,7 @@ function cancelFeedback(){
   const pending=feedbackPending;
   feedbackPending=null;
   if(pending){
-    if(!pending.saved)unsentFeedbackDraft=$("feedbackText").value;
+    if(!pending.saved){if(pending.mode==="general")generalFeedbackDraft=$("feedbackText").value;else unsentFeedbackDraft=$("feedbackText").value;}
     pending.controller.abort();
   }
   const dialog=$("feedbackDialog");
@@ -386,41 +387,53 @@ function cancelFeedback(){
   $("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;
   $("feedbackText").disabled=false;$("feedbackError").textContent="";
 }
-function showOrderFeedback(msg,items,notes){
+function showOrderFeedback(msg,items,notes){return showFeedback("order",msg,items,notes);}
+function showGeneralFeedback(){return showFeedback("general","",[],"");}
+function showFeedback(mode,msg,items,notes){
   if(feedbackPending||maintenance||!storeReady)return false;
   const dialog=$("feedbackDialog");
   if(dialog.open)return false;
-  feedbackPending={msg,items,notes,id:Date.now()+"-"+crypto.randomUUID(),saved:false,busy:false,controller:new AbortController()};
-  $("feedbackText").value=unsentFeedbackDraft;unsentFeedbackDraft="";$("feedbackText").disabled=false;$("feedbackError").textContent="";
+  feedbackPending={mode,msg,items,notes,id:Date.now()+"-"+crypto.randomUUID(),saved:false,busy:false,controller:new AbortController()};
+  const general=mode==="general";
+  $("feedbackText").value=general?generalFeedbackDraft:unsentFeedbackDraft;
+  if(general)generalFeedbackDraft="";else unsentFeedbackDraft="";
+  $("feedbackText").disabled=false;$("feedbackError").textContent="";
+  $("feedbackSend").textContent=general?"إرسال الرأي":"إرسال الاقتراح والمتابعة";
+  $("feedbackSkip").textContent=general?"إلغاء":"تخطي والطلب عبر واتساب";
+  const close=$("feedbackClose");close.setAttribute?.("aria-label",general?"إغلاق والعودة للمتجر":"إغلاق والعودة لتعديل الطلب");close.title=general?"العودة للمتجر":"العودة لتعديل الطلب";
   $("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;
   try{dialog.showModal();return true;}catch{cancelFeedback();toast("تعذر فتح نافذة الطلب، حاول مجدداً","err");return false;}
 }
 async function finishFeedback(send){
   const pending=feedbackPending;if(!pending||pending.busy)return;
   const field=$("feedbackText"),error=$("feedbackError"),value=field.value.trim();
-  if(send&&!value&&!pending.saved){error.textContent="اكتب اقتراحك أو اختر تخطي.";field.focus();return;}
+  const general=pending.mode==="general";
+  if(general&&!send){cancelFeedback();return;}
+  if(send&&!value&&!pending.saved){error.textContent=general?"اكتب رأيك أو اقتراحك أولاً.":"اكتب اقتراحك أو اختر تخطي.";field.focus();return;}
   pending.busy=true;$("feedbackSend").disabled=true;$("feedbackSkip").disabled=true;field.disabled=true;
-  error.textContent=send&&!pending.saved?"جاري التحقق من الطلب…":"جاري فتح الطلب…";
+  error.textContent=general?"جاري حفظ رأيك…":send&&!pending.saved?"جاري التحقق من الطلب…":"جاري فتح الطلب…";
   try{
     if(send&&!pending.saved){
-      if(!await canOrder(pending)){
+      if(!general&&!await canOrder(pending)){
         if(isCurrentFeedback(pending))error.textContent="تعذر التحقق من المتجر. أعد المحاولة أو ارجع لتعديل الطلب.";
         return;
       }
       if(!isCurrentFeedback(pending))return;
       error.textContent="جاري حفظ رأيك…";
-      const {res,data:j}=await requestJSON("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:pending.id,text:value,items:pending.items})},7000,pending.controller.signal);
+      const {res,data:j}=await requestJSON("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:pending.id,text:value,items:pending.items,kind:general?"general":"order"})},7000,pending.controller.signal);
       if(!isCurrentFeedback(pending))return;
-      if(!res.ok||!j.ok)throw Error(j.error||"تعذر حفظ الرأي. يمكنك إعادة المحاولة أو التخطي.");
+      if(!res.ok||!j.ok)throw Error(j.error||"تعذر حفظ الرأي. يمكنك إعادة المحاولة.");
       pending.saved=true;error.textContent=j.preview?"معاينة: لم يُحفظ رأي حقيقي.":"شكراً لك، تم حفظ رأيك.";
     }
     if(!isCurrentFeedback(pending))return;
+    if(general){const message=error.textContent;cancelFeedback();generalFeedbackDraft="";toast(message);return;}
     if(await openWhatsapp(pending.msg,pending.items,pending.notes,undefined,pending)){
       if(isCurrentFeedback(pending)){feedbackPending=null;unsentFeedbackDraft="";$("feedbackDialog").close();}
     }else if(isCurrentFeedback(pending))error.textContent=pending.saved?"تم حفظ رأيك، تعذر فتح الطلب. حاول المتابعة مجدداً.":"تعذر فتح الطلب حالياً. أعد المحاولة أو ارجع لتعديل الطلب.";
-  }catch(e){if(isCurrentFeedback(pending))error.textContent=(e.message||"تعذر الاتصال")+" — يمكنك إعادة المحاولة أو التخطي أو الإغلاق.";}
+  }catch(e){if(isCurrentFeedback(pending))error.textContent=(e.message||"تعذر الاتصال")+(general?" — يمكنك إعادة المحاولة أو الإغلاق.":" — يمكنك إعادة المحاولة أو التخطي أو الإغلاق.");}
   finally{if(isCurrentFeedback(pending)){pending.busy=false;$("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;field.disabled=pending.saved;}}
 }
+$("generalFeedbackBtn").addEventListener("click",showGeneralFeedback);
 $("feedbackForm").addEventListener("submit",e=>{e.preventDefault();finishFeedback(true);});
 $("feedbackSkip").addEventListener("click",()=>finishFeedback(false));
 $("feedbackClose").addEventListener("click",cancelFeedback);

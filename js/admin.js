@@ -785,7 +785,9 @@ function currentFeedbackMonth(){
 function renderFeedbackRecord(r){
   const date=new Date(r.timestamp);
   const stamp=Number.isNaN(date.getTime())?"—":feedbackDate.format(date);
-  return `<article class="feedback-record"><div class="feedback-meta"><strong>رأي مجهول</strong><time dir="ltr" datetime="${esc(r.timestamp)}">${esc(stamp)}</time></div><p class="feedback-text">${esc(r.text)}</p><details><summary>المنتجات المحددة (${r.items?.length||0})</summary><ul>${(r.items||[]).map(i=>`<li>${esc(i.name)} × ${esc(i.qty)} — ${esc(formatAmount(i.total,i.cur))} ${esc(CUR_SYM[i.cur]||i.cur)}</li>`).join("")}</ul></details><p class="hint">محاولة طلب قبل الانتقال إلى واتساب</p></article>`;
+  const general=r.status==="general-feedback";
+  const products=general?'<p class="hint">لا يوجد طلب مرتبط بهذا الرأي.</p>':`<details><summary>المنتجات المحددة (${r.items?.length||0})</summary><ul>${(r.items||[]).map(i=>`<li>${esc(i.name)} × ${esc(i.qty)} — ${esc(formatAmount(i.total,i.cur))} ${esc(CUR_SYM[i.cur]||i.cur)}</li>`).join("")}</ul></details><p class="hint">محاولة طلب قبل الانتقال إلى واتساب</p>`;
+  return `<article class="feedback-record"><div class="feedback-meta"><strong>${general?"رأي عام — مجهول":"رأي مع طلب — مجهول"}</strong><time dir="ltr" datetime="${esc(r.timestamp)}">${esc(stamp)}</time></div><p class="feedback-text">${esc(r.text)}</p>${products}</article>`;
 }
 async function loadFeedback(append=false){
   if(DEMO){const m=$("feedbackMonth");if(!m.value)m.value=currentFeedbackMonth();const sample={timestamp:new Date().toISOString(),text:"مثال تجريبي: أتمنى إضافة المزيد من المنتجات.",items:[{name:"عصير تجريبي",qty:2,cur:"USD",total:2.5}]};const has=m.value===currentFeedbackMonth();$("feedbackList").innerHTML=has?renderFeedbackRecord(sample):"<p>لا توجد آراء في هذا الشهر.</p>";$("feedbackCount").textContent="آراء تجريبية: "+(has?1:0);$("moreFeedback").hidden=true;return;}
