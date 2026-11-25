@@ -37,11 +37,11 @@ export function num(v, { min = 0, max = 1e12, int = false } = {}) {
 /** رابط آمن: http(s) مطلق أو مسار نسبي داخلي يبدأ بـ / (مثل /api/image/..) */
 export function safeUrl(v) {
   const s = str(v, LIMITS.url);
-  if (!s) return "";
-  if (/^\/(?!\/)[^\s]*$/.test(s)) return s;              // مسار داخلي
+  if (!s || /[\u0000-\u0020\u007F\\]/.test(s)) return "";
+  if (/^\/(?!\/)/.test(s)) return s;
   try {
     const u = new URL(s);
-    if (u.protocol === "https:" || u.protocol === "http:") return u.href;
+    if ((u.protocol === "https:" || u.protocol === "http:") && !u.username && !u.password) return u.href;
   } catch {}
   return "";
 }
