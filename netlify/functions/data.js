@@ -113,7 +113,8 @@ export default async (req, context) => {
     try { body = JSON.parse(raw); } catch { return json({ error: "JSON غير صالح" }, 400, cors); }
     if (!hasValidShape(body)) return json({ error: "بنية البيانات غير صالحة" }, 400, cors);
 
-    const clean = sanitizeStore(body);
+    let clean;
+    try { clean=sanitizeStore(body); } catch { return json({error:"أسعار أو أسعار صرف خارج النطاق المدعوم"},400,cors); }
 
     try {
       const currentRec = await store.getWithMetadata(KEY, { type: "json" });
