@@ -187,3 +187,31 @@ test("Telegram splits at complete product blocks and preserves bidi isolates",()
   assert.equal(chunks.join("\n\n"),blocks.join("\n\n"));
   assert.ok(chunks.every(c=>(c.match(/[\u2066\u2068]/g)||[]).length===(c.match(/\u2069/g)||[]).length));
 });
+
+test("final totals represent the entire basket in each currency, even hidden currencies",async()=>{
+  const t=await storefront();
+  t.api.buyNowWA(1);await t.api.finishFeedback(false);
+  const wa=new URL(t.location.assigned).searchParams.get("text");
+  const tg=buildOrder(catalog,{items:[{id:1,qty:2},{id:2,qty:3}]}).text;
+  for(const msg of [wa,tg]){
+    const final=msg.split("السعر النهائي الإجمالي:")[1];
+    assert.ok(final.includes("119,000\u00a0ل.س"));
+    assert.ok(final.includes("281.0\u00a0₺"));
+    assert.ok(final.includes("8.50\u00a0$"));
+    assert.equal((final.match(/بالسوري|بالتركي|بالدولار/g)||[]).length,3);
+    assert.doesNotMatch(final,/84,000|2\.50/);
+  }
+  const variant=buildOrder(catalog,{items:[{id:1,variant:0,qty:3},{id:2,qty:2}]}).text.split("السعر النهائي الإجمالي:")[1];
+  assert.ok(variant.includes("129,500\u00a0ل.س"));
+  assert.ok(variant.includes("306.0\u00a0₺"));
+  assert.ok(variant.includes("9.25\u00a0$"));
+});
+test("unavailable currency is not misrepresented as a partial or zero total",()=>{
+  const rows=[{prices:{USD:2,TRY:66,SYP:0},qty:2},{prices:{USD:1,TRY:33,SYP:14000},qty:1}];
+  const before=JSON.stringify(rows);
+  const totals=orderFormat.formatGrandTotals(rows,{USD_TRY:33});
+  assert.ok(totals.includes("بالسوري: غير متاح"));
+  assert.ok(totals.includes("165.0\u00a0₺"));
+  assert.ok(totals.includes("5.00\u00a0$"));
+  assert.equal(JSON.stringify(rows),before);
+});

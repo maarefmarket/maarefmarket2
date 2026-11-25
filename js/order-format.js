@@ -1,4 +1,4 @@
-import { formatMoney } from "./money.js";
+import { formatMoney, priceTicks, sumTicks, fromTicks, normalizeRates, decimal } from "./money.js";
 
 // Keep each mixed-language name and each numeric amount in its own bidi
 // isolate. Explicit RTL paragraph starts keep labels and bullets aligned.
@@ -56,4 +56,22 @@ export function splitOrderText(text,max=1800){
     }
   }
   push();return result;
+}
+
+// Each total represents the complete basket in one currency, not a subtotal
+// of items billed in that currency. Sum already-rounded catalog unit prices.
+export function formatGrandTotals(rows,rawRates,{bold=false}={}){
+  const rates=normalizeRates(rawRates);
+  return ["SYP","TRY","USD"].map(cur=>{
+    const ticks={};
+    for(const {prices,qty} of rows){
+      const value=decimal(prices?.[cur]);
+      // A zero price can be a legitimate rounded conversion of a USD price.
+      const convertedZero=cur!=="USD"&&decimal(prices?.USD)>0&&rates["USD_"+cur]>0&&prices?.[cur]===0;
+      if(!value&&!convertedZero)return RTL+"• "+labels[cur]+": غير متاح";
+      if(!Number.isSafeInteger(qty)||qty<1||qty>999)throw Error("Invalid quantity");
+      sumTicks(ticks,cur,priceTicks(value,cur)*qty);
+    }
+    return formatOrderTotal(cur,fromTicks(ticks[cur]||0,cur),null,{bold});
+  }).join("\n");
 }
