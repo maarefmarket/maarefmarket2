@@ -40,10 +40,13 @@ export function formatAmount(value,c){return formatters[c].format(value||0);}
 export function formatMoney(value,c){return formatAmount(value,c)+" "+({USD:"$",TRY:"₺",SYP:"ل.س"}[c]);}
 export function normalizeRates(raw={}){
   raw=raw&&typeof raw==="object"?raw:{};
-  const direct=c=>Math.min(1e9,decimal(raw["USD_"+c]));
-  const inverse=c=>decimal(raw[c+"_USD"]);
-  const tryRate=direct("TRY")||(inverse("TRY")?1/inverse("TRY"):0)||(direct("SYP")&&decimal(raw.SYP_TRY)?direct("SYP")*decimal(raw.SYP_TRY):0);
-  const sypRate=direct("SYP")||(inverse("SYP")?1/inverse("SYP"):0)||(tryRate&&decimal(raw.TRY_SYP)?tryRate*decimal(raw.TRY_SYP):0);
+  const pair=(a,b)=>{
+    const n=decimal(raw[a+"_"+b]),inv=decimal(raw[b+"_"+a]);
+    return n|| (inv?1/inv:0);
+  };
+  let tryRate=pair("USD","TRY"),sypRate=pair("USD","SYP");
+  if(!tryRate&&sypRate)tryRate=sypRate*pair("SYP","TRY");
+  if(!sypRate&&tryRate)sypRate=tryRate*pair("TRY","SYP");
   return {USD_TRY:Math.min(1e9,tryRate),USD_SYP:Math.min(1e9,sypRate)};
 }
 export function normalizePrices(raw={},rates={},previousRates=rates){
