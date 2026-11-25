@@ -87,7 +87,6 @@ export function clientIp(req, context) {
   return (
     (context && context.ip) ||
     req.headers.get("x-nf-client-connection-ip") ||
-    (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
     "unknown"
   );
 }
@@ -99,21 +98,22 @@ export async function rateLimit(bucket, key, { limit, windowMs }) {
   try {
     const store = getStore({ name: "campuskart-ratelimit", consistency: "strong" });
     const k = `${bucket}:${String(key).replace(/[^a-zA-Z0-9:._-]/g, "_").slice(0, 80)}`;
-    const now = Date.now();
-    let rec = await store.get(k, { type: "json" });
-    if (!rec || typeof rec.resetAt !== "number" || rec.resetAt <= now) {
-      rec = { count: 0, resetAt: now + windowMs };
+    for (let attempt=0;attempt<4;attempt++) {
+      const now=Date.now();
+      const entry=await store.getWithMetadata(k,{type:"json"});
+      let rec=entry?.data;
+      if(!rec || !Number.isSafeInteger(rec.count) || typeof rec.resetAt!=="number" || rec.resetAt<=now) rec={count:0,resetAt:now+windowMs};
+      const retryAfterSec=Math.max(1,Math.ceil((rec.resetAt-now)/1000));
+      if(rec.count>=limit)return {allowed:false,remaining:0,retryAfterSec};
+      if(entry && !entry.etag)throw new Error("Missing rate-limit ETag");
+      const next={count:rec.count+1,resetAt:rec.resetAt};
+      const written=await store.setJSON(k,next,entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
+      if(written.modified)return {allowed:true,remaining:Math.max(0,limit-next.count),retryAfterSec};
     }
-    rec.count += 1;
-    await store.setJSON(k, rec);
-    return {
-      allowed: rec.count <= limit,
-      remaining: Math.max(0, limit - rec.count),
-      retryAfterSec: Math.max(1, Math.ceil((rec.resetAt - now) / 1000)),
-    };
+    return {allowed:false,remaining:0,retryAfterSec:2};
   } catch (e) {
     // عند تعطل التخزين نوقف العمليات المحددة بالمعدل مؤقتاً.
-    console.error("rateLimit error", e);
+    console.error("Rate-limit storage unavailable");
     return { allowed: false, remaining: 0, retryAfterSec: 60 };
   }
 }
