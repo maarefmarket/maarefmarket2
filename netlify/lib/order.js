@@ -3,6 +3,7 @@ import { sanitizeStore, str } from "./validate.js";
 const CURRENCIES = ["USD", "TRY", "SYP"];
 export function buildOrder(rawStore, body) {
   const data = sanitizeStore(rawStore);
+  if(data.settings.maintenanceMode===true)throw new Error("Store under maintenance");
   if (body?.kind === "inquiry") {
     const p = Number.isSafeInteger(body.id) && data.products.find(x => x.id === body.id && x.availability !== "out");
     if (!p) throw new Error("Unavailable product");
