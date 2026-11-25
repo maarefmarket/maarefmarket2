@@ -440,10 +440,13 @@ html.maintenance-mode #shopDock{display:none!important}
 .feedback-close:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .feedback-actions .btn{min-height:44px;white-space:normal}
 
-/* Public feedback entry stays visible beside the scrollable categories. */
-.header-links{display:flex;align-items:stretch;gap:6px;padding-block:0;padding-inline:10px;background:var(--surface)}
-.header-categories{flex:1;min-width:0}
-.header-categories .chipbar{padding-inline:2px 4px;border-bottom:0}
-.general-feedback-btn{display:inline-flex;align-items:center;justify-content:center;align-self:center;gap:6px;flex-shrink:0;min-height:44px;padding:8px 12px;border:1px solid var(--brand);border-radius:12px;background:var(--brand-soft);color:var(--brand);font:inherit;font-size:13px;font-weight:700;white-space:nowrap;cursor:pointer}
+
+/* The feedback entry occupies its own row in the fixed bottom dock.
+   Dock height measurement automatically includes it and any cart summary. */
+.feedback-float-row{display:flex;justify-content:flex-end;align-items:center;width:100%;padding:6px max(12px,env(safe-area-inset-left,0px)) 8px;pointer-events:none}
+.general-feedback-btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px 14px;border:1px solid var(--brand);border-radius:999px;background:var(--brand);color:var(--on-brand);font:inherit;font-size:13px;font-weight:700;white-space:nowrap;box-shadow:var(--shadow);cursor:pointer;pointer-events:auto}
+.general-feedback-btn span{font-size:18px;line-height:1}
 .general-feedback-btn:disabled{opacity:.5;cursor:default}
-@media(max-width:767px){.header-links{padding-inline:10px;gap:5px}.general-feedback-btn{padding-inline:8px;font-size:12px;min-height:44px}}
+.general-feedback-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(min-width:768px){.feedback-float-row{padding:8px 20px 12px}}
+@media(max-width:767px){.feedback-float-row{padding-block:4px 6px}.general-feedback-btn{font-size:12px;padding-inline:12px}}
