@@ -4,6 +4,7 @@ import {readFile} from "node:fs/promises";
 import {runInNewContext} from "node:vm";
 import {randomUUID} from "node:crypto";
 import * as money from "../js/money.js";
+import * as orderFormat from "../js/order-format.js";
 import {sanitizeStore} from "../netlify/lib/validate.js";
 import {buildOrder} from "../netlify/lib/order.js";
 import {makeRecord,monthKey} from "../netlify/functions/feedback.js";
@@ -44,7 +45,7 @@ test("USD canonical pricing includes offers, variants, and legacy prices",()=>{
 test("order totals are exact, use rounded unit prices and respect currency visibility",()=>{
   const o=buildOrder(catalog,{items:[{id:1,variant:0,qty:3},{id:2,qty:2}]});
   assert.equal(o.items[0].total,174);assert.equal(o.items[1].total,56000);
-  assert.match(o.text,/174.0 ₺/);
+  assert.match(o.text,/174\.0\u00a0₺/);
   assert.equal(money.lineAmount({USD:.1},{},3).total,.3);
   assert.equal(money.lineAmount({TRY:10.5},{},3).total,31.5);
   assert.equal(money.lineAmount({SYP:20},{},3).total,60);
@@ -76,8 +77,8 @@ async function storefront(){
     calls.push({url,opts});
     return {ok:url!=="/api/feedback"||!fail,json:async()=>url.includes("status=1")?{maintenanceMode:closed}:url==="/api/feedback"&&fail?{error:"failed"}:{ok:true}};
   };
-  const ctx={...money,document,window:{addEventListener(){}},location,history:{},fetch,URL,AbortSignal,crypto:{randomUUID},console,setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){}};
-  const script=source.replace(/^import .*;\n/,"").split("(async function init()")[0]+
+  const ctx={...money,...orderFormat,document,window:{addEventListener(){}},location,history:{},fetch,URL,AbortSignal,crypto:{randomUUID},console,setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){}};
+  const script=source.replace(/^import .*;\n/gm,"").split("(async function init()")[0]+
     "\n({setup(d){SETTINGS=d.settings;PRODUCTS=d.products;cart={'1':2,'2':3};storeReady=true;},buyNowWA,finishFeedback,checkout,cartTotals,renderMaintenance,getCart:()=>cart,updateShopDock,updateCartCount,cardStep,cardHTML,openCategories});";
   const api=runInNewContext(script,ctx);api.setup(sanitizeStore(catalog));
   return {api,node,calls,location,setFail(v){fail=v;},setClosed(v){closed=v;}};
@@ -89,7 +90,7 @@ test("purchase opens optional feedback, skip sends no feedback and preserves all
   assert.equal(t.calls.filter(x=>x.url==="/api/feedback").length,0);
   const order=JSON.parse(t.calls.find(x=>x.url==="/api/notify").opts.body);
   assert.deepEqual(order.items.map(i=>[i.id,i.qty]),[[1,2],[2,3]]);
-  assert.match(decodeURIComponent(t.location.assigned),/A\* × 2/);
+  assert.match(decodeURIComponent(t.location.assigned),/\*\u2068A\u2069\*\n\u200fالكمية: \u20662\u2069/);
   assert.ok(!decodeURIComponent(t.location.assigned).includes("/api/image/"));
 });
 test("feedback is saved before redirect, failed save can be skipped, duplicate submit blocked",async()=>{
@@ -146,4 +147,43 @@ test("preview admin demo has no production authentication bypass",async()=>{
   assert.equal(detect("deploy-preview-5--maarefmarket.netlify.app",""),false);
   assert.match(source,/async function saveAll\(force = false\) \{[\s\S]*?if\(DEMO\)/);
   assert.match(source,/async function uploadImageBlob\(blob\) \{\s*if\(DEMO\)throw/);
+});
+
+test("mixed-language order message isolates names and numeric prices and separates products",()=>{
+  const d=structuredClone(catalog);
+  d.products[0].name="عصير Orange 250 ml";
+  d.products[1].name="Biscuit بسكويت 2×50g";
+  d.settings.msgTemplate="قالب المتجر {store}\n{items}\n{totals}\n{notes}\nنهاية";
+  const before=JSON.stringify(d);
+  const o=buildOrder(d,{items:[{id:1,qty:2},{id:2,qty:3}],notes:"ملاحظة {store}"});
+  assert.equal(JSON.stringify(d),before);
+  assert.ok(o.text.includes("\u2068عصير Orange 250 ml\u2069"));
+  assert.ok(o.text.includes("\u2068Biscuit بسكويت 2×50g\u2069"));
+  assert.ok(o.text.includes("\u20662\u2069"));
+  assert.ok(o.text.includes("\u206684,000\u00a0ل.س\u2069"));
+  assert.match(o.text,/\n\n\u200f• \u2068Biscuit/);
+  assert.ok(o.text.includes("ملاحظة {store}"));
+  assert.ok(o.text.includes("قالب المتجر Example"));
+  assert.ok(o.text.endsWith("نهاية"));
+  assert.equal(o.items[0].total,2.5);
+  assert.equal(o.items[1].total,84000);
+});
+test("WhatsApp and Telegram share the same layout and preserve the selected products",async()=>{
+  const t=await storefront();
+  t.api.buyNowWA(1);await t.api.finishFeedback(false);
+  const message=new URL(t.location.assigned).searchParams.get("text");
+  assert.ok(message.includes("\n\n\u200f• *\u2068B\u2069*"));
+  assert.ok(message.includes("\u20662.50\u00a0$\u2069"));
+  assert.ok(message.includes("\u206684,000\u00a0ل.س\u2069"));
+  const payload=JSON.parse(t.calls.find(x=>x.url==="/api/notify").opts.body);
+  assert.deepEqual(payload.items.map(i=>[i.id,i.qty]),[[1,2],[2,3]]);
+});
+test("Telegram splits at complete product blocks and preserves bidi isolates",()=>{
+  const item=orderFormat.formatOrderItem({name:"عصير Orange 250 ml",qty:2,unit:1.25,total:2.5,cur:"USD"});
+  const blocks=Array(50).fill(item);
+  const chunks=orderFormat.splitOrderText(blocks.join("\n\n"));
+  assert.ok(chunks.length>1);
+  assert.ok(chunks.every(c=>c.length<=1800));
+  assert.equal(chunks.join("\n\n"),blocks.join("\n\n"));
+  assert.ok(chunks.every(c=>(c.match(/[\u2066\u2068]/g)||[]).length===(c.match(/\u2069/g)||[]).length));
 });
