@@ -1,3 +1,4 @@
+import { decimal, roundPrice, formatAmount, normalizeRates, normalizePrices, normalizeCatalogPricing, convertUSD } from "./money.js";
 /* ============================================================
    CampusKart — لوحة التحكم
    - توكن جلسة موقّع (لا كلمة مرور) في sessionStorage
@@ -115,7 +116,7 @@ function normalize(d) {
   d.banners = Array.isArray(d.banners) ? d.banners : [];
   d.categories = Array.isArray(d.categories) ? d.categories : [];
   d.products = (Array.isArray(d.products) ? d.products : []).map((p) => ({ ...p, prices: p.prices || {}, images: Array.isArray(p.images) ? p.images : [] }));
-  return d;
+  return normalizeCatalogPricing(d);
 }
 async function loadData() {
   toast("جاري التحميل...", "info");
@@ -133,9 +134,13 @@ async function saveAll(force = false) {
   if (!DATA) return;
   $("saveBtnTop").disabled = true; toast("جاري الحفظ...", "info");
   try {
+    const draft=deepClone(DATA);
+    const rates=normalizeRates(draft.settings.rates),previous=normalizeRates(SAVED_DATA?.settings?.rates);
+    if(JSON.stringify(rates)!==JSON.stringify(previous)&&(!rates.USD_TRY||!rates.USD_SYP))throw Error("أدخل سعري صرف الدولار بشكل صحيح");
+    normalizeCatalogPricing(draft,previous);
     const headers = { "Content-Type": "application/json", ...authHeaders(), "X-Base-Version": String(VERSION) };
     if (force) headers["X-Force"] = "1";
-    const res = await fetch("/api/data", { method: "PUT", headers, body: JSON.stringify(DATA) });
+    const res = await fetch("/api/data", { method: "PUT", headers, body: JSON.stringify(draft) });
     const j = await res.json().catch(() => ({}));
     if (res.status === 401) { handleUnauthorized(); return; }
     if (res.status === 409) {
@@ -146,7 +151,7 @@ async function saveAll(force = false) {
     }
     if (!res.ok) throw new Error(j.error || "HTTP " + res.status);
     VERSION = Number(j.version) || VERSION;
-    SAVED_DATA = deepClone(DATA); updateDirty(); renderMaintenanceStatus();
+    DATA=draft; SAVED_DATA = deepClone(DATA); renderProducts(); renderRates(); updateDirty(); renderMaintenanceStatus();
     toast("✓ تم الحفظ ونُشر للجميع", "success");
   } catch (e) { toast("فشل الحفظ: " + (e.message || e), "error"); }
   finally { $("saveBtnTop").disabled = false; }
@@ -166,28 +171,7 @@ function renderAll() {
 }
 
 /* ---------- تحليل الأسعار ---------- */
-function parsePrice(input, currency) {
-  if (input == null) return 0;
-  let s = String(input).trim();
-  if (!s) return 0;
-  s = s.replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x0660 + 0x30)).replace(/[٫٬]/g, ",").replace(/[^\d.,]/g, "");
-  if (!s) return 0;
-  if (currency === "SYP") { const n = parseInt(s.replace(/[.,]/g, ""), 10); return isFinite(n) && n >= 0 ? n : 0; }
-  const lastDot = s.lastIndexOf("."), lastCom = s.lastIndexOf(",");
-  let decSep = "";
-  if (lastDot !== -1 && lastCom !== -1) decSep = lastDot > lastCom ? "." : ",";
-  else if (lastDot !== -1 || lastCom !== -1) {
-    const sep = lastDot !== -1 ? "." : ","; const idx = lastDot !== -1 ? lastDot : lastCom;
-    const count = (s.match(new RegExp("\\" + sep, "g")) || []).length;
-    const after = s.length - idx - 1;
-    decSep = count > 1 || (after === 3 && idx > 0) ? "" : sep;
-  }
-  if (decSep === ".") s = s.replace(/,/g, "");
-  else if (decSep === ",") s = s.replace(/\./g, "").replace(",", ".");
-  else s = s.replace(/[.,]/g, "");
-  const n = parseFloat(s);
-  return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
-}
+function parsePrice(input,currency){return currency?roundPrice(input,currency):decimal(input);}
 const nextProductId = () => Math.max(0, ...DATA.products.map((x) => +x.id || 0)) + 1;
 
 /* ---------- المنتجات ---------- */
@@ -217,7 +201,7 @@ function renderProducts() {
       <td>${img ? `<img class="thumb-mini" src="${img}" alt="" loading="lazy">` : '<div class="thumb-mini"></div>'}</td>
       <td><strong>${esc(p.name)}</strong>${p.group ? `<div class="hint">🧩 ${esc(p.group)}</div>` : ""}${p.variants?.length ? `<div class="hint">${p.variants.length} أنواع داخلية</div>` : ""}</td>
       <td>${esc(catMap[p.category] || p.category)}</td>
-      <td>${p.prices.USD || 0}</td><td>${p.prices.TRY || 0}</td><td>${(p.prices.SYP || 0).toLocaleString("en-US")}</td>
+      <td>${formatAmount(p.prices.USD,"USD")}</td><td>${formatAmount(p.prices.TRY,"TRY")}</td><td>${formatAmount(p.prices.SYP,"SYP")}</td>
       <td><span class="pill ${av}" title="${av === "out" ? "مخفي من الموقع — يبقى هنا فقط" : ""}">${av === "in" ? "متوفر" : av === "limited" ? "محدود" : "🚫 مخفي"}</span></td>
       <td><div class="row-actions">
         <button class="btn btn-info btn-sm" data-edit-product="${p.id}" title="تعديل">✏️</button>
@@ -285,15 +269,19 @@ function openProductModal(id) {
 }
 function saveProduct(thenAddSibling) {
   const name = $("mpName").value.trim(), category = $("mpCategory").value;
-  const prices = { USD: parsePrice($("mpPriceUSD").value, "USD"), TRY: parsePrice($("mpPriceTRY").value, "TRY"), SYP: parsePrice($("mpPriceSYP").value, "SYP") };
+  let prices = { USD: parsePrice($("mpPriceUSD").value, "USD"), TRY: parsePrice($("mpPriceTRY").value, "TRY"), SYP: parsePrice($("mpPriceSYP").value, "SYP") };
   if (!name) { toast("اسم المنتج مطلوب", "error"); return; }
   if (!category) { toast("اختر القسم", "error"); return; }
   if (!prices.USD && !prices.TRY && !prices.SYP) { toast("أدخل سعراً واحداً على الأقل", "error"); return; }
   const old = DATA.products.find((x) => x.id === editingProductId);
-  const oldPrices = { USD: parsePrice($("mpOldUSD").value, "USD"), TRY: parsePrice($("mpOldTRY").value, "TRY"), SYP: parsePrice($("mpOldSYP").value, "SYP") };
+  let oldPrices = { USD: parsePrice($("mpOldUSD").value, "USD"), TRY: parsePrice($("mpOldTRY").value, "TRY"), SYP: parsePrice($("mpOldSYP").value, "SYP") };
+  const rates=normalizeRates(DATA.settings.rates);
+  try{prices=normalizePrices(prices,rates);oldPrices=normalizePrices(oldPrices,rates);}catch{toast("الأسعار خارج النطاق المدعوم","error");return;}
+  if(!prices.USD){toast("أدخل سعر المنتج بالدولار","error");return;}
   const variants = mpVariants.map((v) => {
     const out = { name: String(v.name || "").trim().slice(0, 120) };
     if (v.prices && (v.prices.USD || v.prices.TRY || v.prices.SYP)) out.prices = v.prices;
+    if(v.showCurrencies)out.showCurrencies=v.showCurrencies;
     if (v.availability) out.availability = v.availability;
     if (v.image) out.image = v.image;
     return out;
@@ -309,6 +297,7 @@ function saveProduct(thenAddSibling) {
   };
   if (oldPrices.USD || oldPrices.TRY || oldPrices.SYP) p.oldPrices = oldPrices; else delete p.oldPrices;
   if (variants.length) p.variants = variants; else delete p.variants;
+  try{for(const v of variants){if(v.prices)v.prices=normalizePrices(v.prices,rates);}}catch{toast("سعر أحد الأنواع خارج النطاق المدعوم","error");return;}
   if (old) { DATA.products[DATA.products.indexOf(old)] = p; toast("تم التعديل", "success"); }
   else { DATA.products.unshift(p); toast("تمت الإضافة", "success"); }
   $("modalProduct").classList.remove("open");
@@ -454,56 +443,38 @@ function updateBannerPreview() {
 }
 
 /* ---------- أسعار الصرف ---------- */
-function renderRates() {
-  DATA.settings.rates = DATA.settings.rates || {};
-  const base = CURS.includes(DATA.settings.baseCurrency) ? DATA.settings.baseCurrency : "USD";
-  $("rBaseCur").value = base;
-  const others = CURS.filter((c) => c !== base);
-  $("rRate1Label").textContent = `1 ${CUR_NAME[base]} = ? ${CUR_NAME[others[0]]}`;
-  $("rRate2Label").textContent = `1 ${CUR_NAME[base]} = ? ${CUR_NAME[others[1]]}`;
-  $("rRate1").dataset.target = others[0]; $("rRate2").dataset.target = others[1];
-  $("rRate1").value = DATA.settings.rates[`${base}_${others[0]}`] ?? "";
-  $("rRate2").value = DATA.settings.rates[`${base}_${others[1]}`] ?? "";
-  $("rCountLabel").textContent = `${DATA.products.filter((p) => (p.prices[base] || 0) > 0).length} من ${DATA.products.length}`;
+function renderRates(){
+  const rates=normalizeRates(DATA.settings.rates);
+  DATA.settings.baseCurrency="USD";DATA.settings.rates=rates;
+  $("rRate1").value=rates.USD_TRY||"";
+  $("rRate2").value=rates.USD_SYP||"";
+  $("rCountLabel").textContent=String(DATA.products.length);
   renderRatesPreview();
 }
-function renderRatesPreview() {
-  const base = $("rBaseCur").value, r1 = parsePrice($("rRate1").value), r2 = parsePrice($("rRate2").value);
-  const o = [$("rRate1").dataset.target, $("rRate2").dataset.target];
-  const conv = (v, c) => c === "SYP" ? Math.round(v).toLocaleString("en-US") : (Math.round(v * 100) / 100).toLocaleString("en-US");
-  const out = [`تطبيق التحويل على منتج سعره <strong>100 ${CUR_SYM[base]}</strong>:`];
-  if (r1 > 0) out.push(`▸ ${CUR_NAME[o[0]]}: <strong>${conv(100 * r1, o[0])} ${CUR_SYM[o[0]]}</strong>`);
-  if (r2 > 0) out.push(`▸ ${CUR_NAME[o[1]]}: <strong>${conv(100 * r2, o[1])} ${CUR_SYM[o[1]]}</strong>`);
-  $("ratesPreview").innerHTML = out.join("<br>");
+function readRates(){return {USD_TRY:decimal($("rRate1").value),USD_SYP:decimal($("rRate2").value)};}
+function renderRatesPreview(){
+  const r=readRates();
+  try{
+    const sample=[1,1.25,2.50].map(v=>'<div><strong>'+formatAmount(v,"USD")+' $</strong> — '+(r.USD_TRY?formatAmount(convertUSD(v,r.USD_TRY,"TRY"),"TRY")+" ₺":"—")+' · '+(r.USD_SYP?formatAmount(convertUSD(v,r.USD_SYP,"SYP"),"SYP")+" ل.س":"—")+'</div>');
+    $("ratesPreview").innerHTML=sample.join("");
+  }catch{$("ratesPreview").textContent="أسعار صرف خارج النطاق المدعوم";}
 }
-function bindRatesTab() {
-  $("rBaseCur").addEventListener("change", (e) => { DATA.settings.baseCurrency = e.target.value; renderRates(); updateDirty(); });
-  ["rRate1", "rRate2"].forEach((id) => $(id).addEventListener("input", () => {
-    DATA.settings.rates = DATA.settings.rates || {};
-    DATA.settings.rates[`${$("rBaseCur").value}_${$(id).dataset.target}`] = parsePrice($(id).value);
-    renderRatesPreview(); updateDirty();
+function bindRatesTab(){
+  ["rRate1","rRate2"].forEach(id=>$(id).addEventListener("input",()=>{
+    if(!DATA)return;
+    DATA.settings.rates=readRates();renderRatesPreview();updateDirty();
   }));
 }
-function applyRatesToAll() {
-  const base = $("rBaseCur").value, r1 = parsePrice($("rRate1").value), r2 = parsePrice($("rRate2").value);
-  const o = [$("rRate1").dataset.target, $("rRate2").dataset.target];
-  if (!r1 || !r2) { toast("أدخل أسعار التحويل أولاً", "error"); return; }
-  const eligible = DATA.products.filter((p) => (p.prices[base] || 0) > 0);
-  if (!eligible.length) { toast("لا توجد منتجات لها سعر بـ " + CUR_NAME[base], "error"); return; }
-  if (!confirm(`سيتم تحديث أسعار ${eligible.length} منتج على أساس:\n1 ${CUR_NAME[base]} = ${r1} ${CUR_NAME[o[0]]}\n1 ${CUR_NAME[base]} = ${r2} ${CUR_NAME[o[1]]}\n\nمتابعة؟`)) return;
-  const round = (v, c) => (c === "SYP" ? Math.round(v) : Math.round(v * 100) / 100);
-  const convert = (prices) => {
-    const b = prices[base]; if (!b || b <= 0) return;
-    prices[o[0]] = round(b * r1, o[0]); prices[o[1]] = round(b * r2, o[1]);
-  };
-  eligible.forEach((p) => {
-    convert(p.prices);
-    if (p.oldPrices?.[base]) convert(p.oldPrices);
-    (p.variants || []).forEach((v) => v.prices && convert(v.prices));
-  });
-  DATA.settings.baseCurrency = base;
-  renderProducts(); renderRates(); updateDirty();
-  toast(`✓ تم تحديث أسعار ${eligible.length} منتج — اضغط حفظ للنشر`, "success");
+function applyRatesToAll(){
+  const rates=readRates();
+  if(!rates.USD_TRY||!rates.USD_SYP||rates.USD_TRY>1e9||rates.USD_SYP>1e9){toast("أدخل سعري صرف صالحين للدولار","error");return;}
+  try{
+    const draft=deepClone(DATA);draft.settings.rates=rates;
+    normalizeCatalogPricing(draft,normalizeRates(SAVED_DATA?.settings?.rates));
+    DATA=draft;renderProducts();renderRates();updateDirty();
+    const missing=DATA.products.filter(p=>!p.prices.USD).length;
+    toast(missing?"تم التحويل؛ "+missing+" منتج يحتاج إلى سعر بالدولار":"تم تحديث جميع الأسعار — اضغط حفظ للنشر",missing?"info":"success");
+  }catch{toast("تعذر التحويل: الأسعار خارج النطاق المدعوم","error");}
 }
 
 /* ---------- الأقسام ---------- */
