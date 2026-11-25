@@ -3,7 +3,7 @@
 # ============================================================
 
 [build]
-  command = "npm run build"
+  command = "npm test && npm run build"
   publish = "dist"
   functions = "netlify/functions"
 
