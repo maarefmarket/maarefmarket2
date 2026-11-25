@@ -1,3 +1,4 @@
+import { decimal, roundPrice, formatMoney, billingCurrency, lineAmount, fromTicks, sumTicks } from "./money.js";
 /* ============================================================
    CampusKart — منطق واجهة المتجر
    - كل النصوص القادمة من البيانات تُهرَّب (esc) قبل الإدراج في HTML
@@ -102,30 +103,13 @@ function applyTheme(theme) {
 }
 
 /* ---------- تنسيق الأسعار ---------- */
-const fmtN = (v) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(v || 0);
-function money(v, c) {
-  const n = typeof v === "number" ? (isFinite(v) ? v : 0) : num(v);
-  if (c === "SYP") return new Intl.NumberFormat("en-US").format(Math.round(n)) + " ل.س";
-  return fmtN(Math.round(n * 100) / 100) + " " + (c === "USD" ? "$" : c === "TRY" ? "₺" : c);
-}
+const money = formatMoney;
 const catName = (s) => (CATEGORIES.find((c) => c.slug === s) || {}).name || "";
 const availText = (a) => (a === "in" ? "متوفر" : a === "limited" ? "كمية محدودة" : "غير متوفر");
 const isNew = (p) => Date.now() - (p.created || 0) < 48 * HOUR;
 const byId = (id) => PRODUCTS.find((p) => p.id === id);
 // تحويل أي سعر (رقم أو نص مثل "14,000" أو "١٫٥") إلى رقم صحيح
-function num(v) {
-  if (typeof v === "number") return isFinite(v) && v > 0 ? v : 0;
-  let s = String(v ?? "").trim();
-  if (!s) return 0;
-  s = s.replace(/[٠-٩]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x0660 + 0x30)).replace(/[٫٬]/g, ",").replace(/[^\d.,]/g, "");
-  const lastDot = s.lastIndexOf("."), lastCom = s.lastIndexOf(",");
-  if (lastDot !== -1 && lastCom !== -1) s = lastDot > lastCom ? s.replace(/,/g, "") : s.replace(/\./g, "").replace(",", ".");
-  else if (lastCom !== -1) { const after = s.length - lastCom - 1; s = (after === 3 || s.split(",").length > 2) ? s.replace(/,/g, "") : s.replace(",", "."); }
-  else if (lastDot !== -1) { const after = s.length - lastDot - 1; if (s.split(".").length > 2 || (after === 3 && lastDot > 0 && s.length >= 5)) s = s.replace(/\./g, ""); }
-  const n = parseFloat(s);
-  return isFinite(n) && n > 0 ? n : 0;
-}
-const price = (prices, c) => num(prices?.[c]);
+const price = (prices, c) => roundPrice(prices?.[c],c);
 /** العملات التي تُعرض للزبون (لها سعر وغير مخفية) */
 function visibleCurs(p) {
   const sc = p.showCurrencies || {};
@@ -209,35 +193,16 @@ function cardStep(id, d) {
 // كل منتج يُحاسب بعملة واحدة:
 //  1) الدولار إن كان مرئياً وله سعر   2) أول عملة مرئية لها سعر (تركي ثم سوري)
 //  3) إن كانت كل العملات مخفية بالخطأ → أي عملة لها سعر (لا يسقط منتج من الإجمالي أبداً)
-function billingCur(it) {
-  const vis = visibleCurs({ prices: it.prices, showCurrencies: it.showCurrencies });
-  if (vis.includes(PRIMARY)) return PRIMARY;
-  if (vis.length) return vis[0];
-  const any = pricedCurs(it.prices);
-  return any.includes(PRIMARY) ? PRIMARY : any[0] || null;
-}
-// العمليات بالقروش (×100) لتجنّب مثل 0.1+0.2=0.30000000000000004
-const toCents = (v) => Math.round(num(v) * 100);
-const fromCents = (c) => c / 100;
-function lineTotal(it, q) {
-  const c = billingCur(it);
-  if (!c) return null;
-  const unitCents = toCents(it.prices[c]);
-  return { cur: c, unit: fromCents(unitCents), total: fromCents(unitCents * q) };
-}
-/** يُرجع { USD:{sum,count}, TRY:{...}, SYP:{...} } — كل عملة تجمع منتجاتها فقط */
-function cartTotals(src) {
-  src = src || cart;
-  const cents = { USD: 0, TRY: 0, SYP: 0 }, count = { USD: 0, TRY: 0, SYP: 0 };
-  for (const key in src) {
-    const it = resolveItem(key); if (!it) continue;
-    const q = parseInt(src[key], 10) || 0; if (q <= 0) continue;
-    const lt = lineTotal(it, q); if (!lt) continue;
-    cents[lt.cur] += Math.round(lt.total * 100); count[lt.cur] += 1;
+function billingCur(it){return billingCurrency(it.prices,it.showCurrencies);}
+function lineTotal(it,q){return lineAmount(it.prices,it.showCurrencies,q);}
+function cartTotals(src=cart){
+  const ticks={USD:0,TRY:0,SYP:0},count={USD:0,TRY:0,SYP:0};
+  for(const key of Object.keys(src)){
+    const it=resolveItem(key);if(!it)continue;
+    const lt=lineTotal(it,src[key]);if(!lt)continue;
+    sumTicks(ticks,lt.cur,lt.totalTicks);count[lt.cur]++;
   }
-  const out = {};
-  for (const c of Object.keys(cents)) out[c] = { sum: fromCents(cents[c]), count: count[c] };
-  return out;
+  return Object.fromEntries(CUR.map(([c])=>[c,{sum:fromTicks(ticks[c],c),count:count[c]}]));
 }
 function updateCartCount() {
   const n = cartQty(); const el = $("cartCount");
@@ -324,10 +289,11 @@ function submitOrder(src,notes,report){
   const keys=Object.keys(src);
   if(!keys.length){report("السلة فارغة");return false;}
   if(keys.length>50){report("يرجى تقسيم الطلب إلى 50 صنفاً كحد أقصى");return false;}
-  if(keys.some(k=>{const it=resolveItem(k);return !it||it.availability==="out"||!billingCur(it)||!Number.isInteger(src[k])||src[k]<1||src[k]>999;})){
+  if(keys.some(k=>{const it=resolveItem(k);return !it||it.availability==="out"||!lineTotal(it,src[k])||!Number.isInteger(src[k])||src[k]<1||src[k]>999;})){
     report("يوجد منتج غير متوفر أو سعره أو كميته غير صالحة؛ راجع السلة.");return false;
   }
-  const items=orderItems(src),msg=buildOrderMessage(notes,src);
+  const items=orderItems(src);let msg;
+  try{msg=buildOrderMessage(notes,src);}catch{report("إجمالي الطلب أكبر من الحد المدعوم؛ قسّم الطلب.");return false;}
   if(!msg||!items.length){report("السلة فارغة");return false;}
   return openWhatsapp(msg,items,notes);
 }
@@ -643,7 +609,7 @@ function renderCart() {
     $("app").innerHTML = `<div class="empty"><h2 class="section-title center">سلة المشتريات فارغة</h2><p style="margin-top:10px">أضف بعض المنتجات لتبدأ.</p><button class="btn btn-primary" style="margin-top:14px" data-nav="">تصفّح المنتجات</button></div>`;
     return;
   }
-  const t = cartTotals();
+  let t;try{t=cartTotals();}catch{$("app").innerHTML='<div class="empty">إجمالي الطلب كبير جداً. قلّل الكميات قبل الطلب. <button class="btn btn-primary" data-nav="">العودة للمنتجات</button></div>';return;}
   const rows = keys.map((key) => {
     const q = cart[key]; const it = resolveItem(key);
     const img = safeSrc(it.image);
