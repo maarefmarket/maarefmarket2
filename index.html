@@ -23,6 +23,7 @@
     <div class="search" role="search">
       <input id="searchInput" type="search" placeholder="ابحث عن منتج..." aria-label="بحث" maxlength="80" autocomplete="off" />
       <span class="ic" aria-hidden="true">🔍</span>
+      <button type="button" id="clearSearch" class="clear-search" aria-label="مسح البحث" hidden>×</button>
     </div>
     <button class="icon-btn" id="cartBtn" aria-label="السلة">
       🛒<span class="cart-count" id="cartCount" style="display:none">0</span>
@@ -33,9 +34,28 @@
 </header>
 
 <main class="container" id="app">
-  <div class="loading"><span>جاري تحميل المتجر</span><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+  <div class="loading" role="status">جاري تحميل المتجر…</div>
+  <div class="skeleton-banner" aria-hidden="true"></div>
+  <div class="grid skeleton-grid" aria-hidden="true"><div class="skeleton-card"><div></div><i></i><i></i><i></i></div><div class="skeleton-card"><div></div><i></i><i></i><i></i></div><div class="skeleton-card"><div></div><i></i><i></i><i></i></div><div class="skeleton-card"><div></div><i></i><i></i><i></i></div><div class="skeleton-card"><div></div><i></i><i></i><i></i></div><div class="skeleton-card"><div></div><i></i><i></i><i></i></div><div class="skeleton-card"><div></div><i></i><i></i><i></i></div><div class="skeleton-card"><div></div><i></i><i></i><i></i></div></div>
 </main>
 
+<div id="shopDock" class="shop-dock" hidden>
+  <div id="cartSummary" class="cart-summary" hidden>
+    <div class="summary-info"><strong id="summaryCount"></strong><span id="summaryTotal" dir="auto"></span></div>
+    <button class="btn btn-outline" type="button" data-nav="cart">السلة</button>
+    <button class="btn btn-wa" type="button" id="dockCheckout">📲 اطلب</button>
+  </div>
+  <nav class="mobile-nav" aria-label="التنقل السريع">
+    <button type="button" data-nav="" data-dock="home"><span aria-hidden="true">⌂</span>الرئيسية</button>
+    <button type="button" id="dockCategories" data-dock="categories"><span aria-hidden="true">▦</span>الأقسام</button>
+    <button type="button" id="dockSearch" data-dock="search"><span aria-hidden="true">⌕</span>البحث</button>
+    <button type="button" data-nav="cart" data-dock="cart"><span aria-hidden="true">🛒</span>السلة <b id="dockCount" hidden></b></button>
+  </nav>
+</div>
+<dialog id="categoryDialog" class="category-dialog" aria-labelledby="categoryTitle">
+  <div class="category-head"><h2 id="categoryTitle">تصفّح الأقسام</h2><button type="button" id="categoryClose" aria-label="إغلاق">×</button></div>
+  <div id="categoryChoices" class="category-choices"></div>
+</dialog>
 <footer id="site-footer">
   <div class="container foot" id="foot"></div>
   <div class="copy" id="copy"></div>
