@@ -114,13 +114,7 @@
     <!-- أسعار الصرف -->
     <section id="tab-rates" class="tab-pane" style="display:none">
       <div class="section-head"><div><h2>💱 أسعار الصرف المركزية</h2><p>حدّد أسعار التحويل وطبّقها على جميع المنتجات دفعة واحدة.</p></div></div>
-      <div class="card">
-        <h3>⚙️ العملة المرجعية</h3>
-        <div class="hint" style="margin-bottom:8px">العملة التي تُدخل بها الأسعار أصلاً (لن تتغيّر عند التحويل).</div>
-        <select id="rBaseCur" class="field" style="max-width:300px">
-          <option value="USD">الدولار ($)</option><option value="TRY">التركي (₺)</option><option value="SYP">السوري (ل.س)</option>
-        </select>
-      </div>
+      <div class="card"><h3>العملة الأساسية: الدولار الأمريكي (USD)</h3><p class="hint">سعر الدولار هو المرجع الثابت. تتحول الأسعار الأخرى عند الحفظ، بما فيها أسعار العروض والأنواع.</p></div>
       <div class="card">
         <h3>💱 أسعار التحويل</h3>
         <div class="row cols-2">
@@ -130,7 +124,7 @@
       </div>
       <div class="card accent">
         <h3>⚠️ تطبيق على جميع المنتجات</h3>
-        <p style="margin:0 0 10px;font-size:13.5px;line-height:1.8">ستُعاد حسابة أسعار العملتين الأخريين لـ <strong id="rCountLabel">كلّ</strong> المنتجات اعتماداً على سعرها بالعملة المرجعية. الليرة السورية تُقرَّب لأقرب عدد صحيح.</p>
+        <p style="margin:0 0 10px;font-size:13.5px;line-height:1.8">ستُعاد حسابة أسعار العملتين الأخريين لـ <strong id="rCountLabel">كلّ</strong> المنتجات اعتماداً على سعرها بالعملة المرجعية. السوري لأقرب 10 ليرات، والتركي لأقرب 0.5 ليرة، والدولار لأقرب 0.01. عند المنتصف يكون التقريب للأعلى. يتم تحديث الأسعار تلقائياً عند الحفظ؛ ويمكن معاينتها محلياً أولاً.</p>
         <button class="btn btn-primary" data-action="apply-rates">🔄 تطبيق أسعار الصرف على جميع المنتجات</button>
       </div>
       <div class="card"><h3>👁 معاينة</h3><div id="ratesPreview" style="line-height:2;font-size:14px"></div></div>
@@ -399,6 +393,6 @@
 </div>
 
 <div id="toast" role="status"></div>
-<script src="js/admin.js"></script>
+<script type="module" src="js/admin.js"></script>
 </body>
 </html>
