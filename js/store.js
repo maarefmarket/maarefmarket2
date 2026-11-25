@@ -568,7 +568,7 @@ function pickVariant(vi) {
   $("pPricesBox").innerHTML = priceRows(v.prices && pricedCurs(v.prices).length ? v.prices : p.prices, v.showCurrencies || p.showCurrencies);
   const avail = v.availability || p.availability;
   const tag = $("pAvailTag"); tag.className = "tag " + esc(avail); tag.textContent = availText(avail);
-  const gm = $("gMain"); const vimg = viewerURL(v.image); if (gm) { if (vimg) gm.src = vimg; else gSet(0); }
+  const gm = $("gMain"); const vimg = viewerURL(v.image); if (gm) { const urls=[...new Set([...p.images,...(p.variants||[]).map(x=>x.image)].map(viewerURL).filter(Boolean))]; gSet(Math.max(0,urls.indexOf(vimg))); }
   document.querySelectorAll("#varBox .var-chip").forEach((c, i) => c.classList.toggle("active", i === vi));
   const addBtn = $("pAddBtn"); if (addBtn) addBtn.disabled = avail === "out";
 }
@@ -666,9 +666,9 @@ function openBannerViewer(index){
   const entries=BANNERS.map((b,i)=>({src:viewerURL(b.image),title:String(b.title||"إعلان "+(i+1)),link:viewerURL(b.link),index:i})).filter(b=>b.src);
   openViewer(entries,entries.findIndex(b=>b.index===index));
 }
-function openProductViewer(id,current){
+function openProductViewer(id,current,selected){
   const p=byId(id);if(!p)return;
-  const active=current?viewerURL($("gMain")?.getAttribute("src")):"";
+  const active=viewerURL(selected || (current?$("gMain")?.getAttribute("src"):""));
   const urls=[...new Set([...p.images,...(p.variants||[]).map(v=>v.image)].map(viewerURL).filter(Boolean))];
   openViewer(urls.map(src=>({src,title:p.name,link:""})),Math.max(0,urls.indexOf(active)),current?null:id);
 }
@@ -692,7 +692,7 @@ imageViewer.addEventListener("close",()=>{
   if(viewerFocus?.isConnected)viewerFocus.focus({preventScroll:true});
   viewerItems=[];viewerProduct=null;viewerFocus=null;viewerResume=false;
 });
-document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches?.('img[data-image-product]')){e.preventDefault();openProductViewer(Number(e.target.dataset.imageProduct),false);}});
+document.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&e.target.matches?.('img[data-image-product]')){e.preventDefault();openProductViewer(Number(e.target.dataset.imageProduct),false,e.target.getAttribute("src"));}});
 
 function route() {
   if(imageViewer.open){viewerResume=false;imageViewer.close();}
@@ -723,7 +723,7 @@ document.addEventListener("click", (e) => {
     const d=imageTrigger.dataset;
     if(d.bannerSet!==undefined){bannerIdx=Number(d.bannerSet);renderBanner();startBanner();return;}
     if(d.imageBanner!==undefined)return openBannerViewer(Number(d.imageBanner));
-    return openProductViewer(Number(d.imageProduct??d.imageCurrent),d.imageCurrent!==undefined);
+    return openProductViewer(Number(d.imageProduct??d.imageCurrent),d.imageCurrent!==undefined,imageTrigger.tagName==="IMG"?imageTrigger.getAttribute("src"):null);
   }
   const t = e.target.closest("[data-nav],[data-open],[data-step],[data-add],[data-buy],[data-var],[data-gstep],[data-gset],[data-pstep],[data-addpage],[data-inquire],[data-cstep],[data-cremove],#checkoutBtn");
   if (!t) return;
