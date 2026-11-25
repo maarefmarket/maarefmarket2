@@ -157,6 +157,8 @@ export function sanitizeStore(input) {
     deliveryNote: str(s.deliveryNote, LIMITS.medium),
     bannerIntervalSec: Math.max(2, Math.min(120, num(s.bannerIntervalSec, { int: true }) || 7)),
     bannersEnabled: s.bannersEnabled !== false,
+    maintenanceMode: s.maintenanceMode === true,
+    maintenanceMessage: str(s.maintenanceMessage, LIMITS.medium),
     msgTemplate: str(s.msgTemplate, LIMITS.template),
     baseCurrency: CURS.includes(s.baseCurrency) ? s.baseCurrency : "USD",
     rates,
