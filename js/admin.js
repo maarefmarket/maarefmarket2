@@ -30,7 +30,11 @@ let mpImages = [], mpVariants = [];
 /* ---------- أدوات ---------- */
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const safeSrc = (u) => { const s = String(u || "").trim(); return /^(\/(?!\/)|https?:\/\/)/i.test(s) ? esc(s) : ""; };
+const safeSrc = (u) => {
+  const s=String(u||"").trim();
+  if(!/^\/(?![\/\\])/.test(s)&&!/^https?:\/\//i.test(s))return "";
+  try {const url=new URL(s,location.href);return /^https?:$/.test(url.protocol)&&!url.username&&!url.password?esc(url.href):"";}catch{return "";}
+};
 const deepClone = (o) => JSON.parse(JSON.stringify(o));
 function toast(msg, type) {
   const t = $("toast"); t.textContent = msg; t.className = "show " + (type || "info");
