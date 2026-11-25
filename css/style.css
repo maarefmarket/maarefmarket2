@@ -81,8 +81,8 @@ header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 9
 .banner h2{font-size:clamp(20px,4vw,34px);margin:6px 0;color:#fff}
 .banner.empty{background:linear-gradient(120deg,var(--brand-2),var(--brand) 60%,color-mix(in srgb,var(--brand) 80%,#fff))}
 .banner-dots{display:flex;gap:6px;justify-content:center;margin-top:8px}
-.banner-dots i{width:6px;height:6px;border-radius:999px;background:var(--line);transition:.2s}
-.banner-dots i.active{background:var(--accent);width:20px}
+.banner-dots button{border:0;padding:0;cursor:pointer;width:6px;height:6px;border-radius:999px;background:var(--line);transition:.2s}
+.banner-dots button.active{background:var(--accent);width:20px}
 
 /* ---------- شريط الأدوات ---------- */
 .toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 0 14px;flex-wrap:wrap}
@@ -243,3 +243,20 @@ footer{margin-top:40px;border-top:1px solid var(--line);background:var(--surface
   .qty-inline .qval{font-size:13px}
   .price b{font-size:14px}
 }
+
+/* Image gallery: original theme and layout preserved. */
+.image-hit{position:absolute;inset:0;width:100%;height:100%;background:transparent;border:0;cursor:zoom-in;z-index:2}
+.image-hit:focus-visible{outline:2px solid var(--accent);outline-offset:-4px}
+.gallery .gnav{z-index:3}
+html.viewer-open{overflow:hidden}
+.image-viewer{position:fixed;inset:0;margin:auto;width:min(94vw,1000px);max-height:94vh;max-height:94dvh;padding:0;border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--fg);overflow:auto;box-shadow:var(--shadow)}
+.image-viewer::backdrop{background:rgba(14,21,35,.83)}
+.viewer-header,.viewer-footer{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px}
+.viewer-header h2{font-size:clamp(15px,3vw,20px);overflow-wrap:anywhere}
+#viewerClose,.viewer-nav{width:42px;height:42px;flex-shrink:0;border:1px solid var(--line);border-radius:50%;background:var(--surface);color:var(--fg);font-size:27px;cursor:pointer;display:grid;place-items:center}
+.viewer-stage{position:relative;background:var(--elevated);display:grid;place-items:center;min-height:120px}
+.viewer-stage img{display:block;max-width:100%;max-height:68vh;max-height:68dvh;width:100%;object-fit:contain;touch-action:pan-y}
+.viewer-nav{position:absolute;top:50%;transform:translateY(-50%);box-shadow:var(--shadow)}
+.viewer-prev{right:10px}.viewer-next{left:10px}
+.viewer-footer{flex-wrap:wrap}.viewer-footer .btn{font-size:12px;padding:8px 13px}
+.image-viewer [hidden]{display:none!important}
