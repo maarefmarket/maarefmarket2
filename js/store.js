@@ -52,7 +52,7 @@ async function loadData() {
 }
 
 function renderMaintenance(message){
-  maintenance=true;storeReady=false;resetShare();stopBanner();
+  maintenance=true;storeReady=false;stopBanner();
   if(imageViewer.open){viewerResume=false;imageViewer.close();}
   document.documentElement.classList.add("maintenance-mode");
   $("app").innerHTML='<section class="maintenance-card" role="status"><img src="assets/logo.svg" alt=""><span class="maintenance-icon" aria-hidden="true">🛠️</span><h1>الموقع قيد الصيانة</h1><p id="maintenanceMessage"></p><button type="button" class="btn btn-primary" id="retryStoreBtn">إعادة المحاولة</button></section>';
@@ -317,17 +317,15 @@ async function openWhatsapp(text, items, notes, inquiryId) {
   location.assign("https://wa.me/"+nums[0]+"?text="+encodeURIComponent(text));
   return true;
 }
-function buyNowWA(id,button) {
+function buyNowWA(id) {
   const p=byId(id); if(!p)return;
   let vi=-1;
   if(p.variants?.length){vi=p.variants.findIndex(v=>v.availability!=="out");if(vi<0)vi=0;}
   const key=vKey(id,vi),it=resolveItem(key);
   if(!it||it.availability==="out"){toast("غير متوفر","err");return;}
   const src={[key]:1},msg=buildOrderMessage("",src);
-  if(msg){
-    if(navigator.share&&navigator.canShare&&button)return prepareOrShare(src,button);
-    openWhatsapp(withPhotoLinks(msg,src),orderItems(src),"");
-  }
+  if(!billingCur(it)){toast("سعر المنتج غير محدد","err");return;}
+  if(msg)return openWhatsapp(msg,orderItems(src),"");
 }
 function inquireWA(id) {
   const p=byId(id);if(!p)return;
@@ -340,87 +338,7 @@ function checkout() {
   if(!msg||!items.length){err.textContent="السلة فارغة";return;}
   if(items.length>50){err.textContent="يرجى تقسيم الطلب إلى 50 صنفاً كحد أقصى";return;}
   if(Object.keys(cart).some(k=>{const it=resolveItem(k);return !it||it.availability==="out"||!billingCur(it);})){err.textContent="يوجد منتج غير متوفر أو سعره غير محدد؛ راجع السلة.";return;}
-  openWhatsapp(withPhotoLinks(msg,cart),items,notes);
-}
-
-/* مشاركة الصور الأصلية: يختار العميل واتساب والمحادثة بنفسه. */
-function withPhotoLinks(text,src){
-  const links=Object.keys(src).map(key=>resolveItem(key)).filter(Boolean).map(it=>{
-    const url=viewerURL(it.image);return url?it.name+": "+url:"";
-  }).filter(Boolean);
-  return links.length?text+"\n\nصور المنتجات:\n"+links.join("\n"):text;
-}
-let preparedShare=null;
-function resetShare(){preparedShare=null;}
-async function getSharePhoto(value){
-  const url=viewerURL(value);if(!url)throw Error("Invalid image");
-  if(new URL(url).origin===location.origin){
-    const res=await fetch(url,{credentials:"omit",signal:AbortSignal.timeout(5000)});
-    if(!res.ok)throw Error("Image unavailable");return res.blob();
-  }
-  // External images may be shared only if their provider permits CORS.
-  // No arbitrary server-side proxy is used.
-  return new Promise((resolve,reject)=>{
-    const img=new Image();img.crossOrigin="anonymous";
-    const timer=setTimeout(()=>{img.onload=img.onerror=null;img.src="";reject(Error("Image timeout"));},5000);
-    img.onerror=()=>{clearTimeout(timer);reject(Error("External image unavailable"));};
-    img.onload=()=>{
-      clearTimeout(timer);
-      try{
-        const scale=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));
-        const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
-        canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
-        canvas.toBlob(blob=>blob?resolve(blob):reject(Error("Image conversion failed")),"image/jpeg",.9);
-      }catch(e){reject(e);}
-    };img.src=url;
-  });
-}
-async function prepareOrShare(quickSrc=null,quickButton=null){
-  const button=quickButton||$("checkoutBtn"),err=quickSrc?null:$("cErr");
-  if(!button||maintenance)return;
-  const src=quickSrc||cart;
-  const originalLabel=quickSrc?"📲 اطلب":"📲 إتمام الطلب مع الصور";
-  const feedback=(message)=>{if(err)err.textContent=message;else toast(message);};
-  const fallback=(message)=>{feedback(message);if(quickSrc&&confirm("تعذر إرفاق الصور مباشرة. هل تريد إرسال الطلب النصي وروابط الصور عبر واتساب؟"))openWhatsapp(withPhotoLinks(text,src),items,notes);};
-  const notes=quickSrc?"":($("cNotes")?.value||"").trim(),items=orderItems(src),text=buildOrderMessage(notes,src),nums=whatsappNumbers();
-  if(!nums.length||!items.length||items.length>50){feedback("تحقق من الطلب ورقم واتساب");return;}
-  if(Object.keys(src).some(k=>{const it=resolveItem(k);return !it||it.availability==="out"||!billingCur(it);})){feedback("يوجد منتج غير متوفر أو سعره غير محدد؛ راجع الطلب.");return;}
-  const signature=JSON.stringify({items,notes});
-  if(preparedShare?.signature===signature&&preparedShare.button===button&&Date.now()-preparedShare.at<30000){
-    try{
-      await navigator.share(preparedShare.payload);
-      notifyBackground(items,notes);resetShare();
-      if(button.isConnected)button.textContent=originalLabel;
-      feedback("تم فتح المشاركة؛ تأكد من إرسال الطلب في المحادثة.");
-    }catch(e){if(e.name!=="AbortError")fallback("تعذرت المشاركة؛ استخدم الطلب النصي وروابط الصور.");}
-    return;
-  }
-  if(!navigator.share||!navigator.canShare){fallback("متصفحك لا يدعم إرفاق الملفات مباشرة. استخدم الطلب النصي وروابط الصور.");return;}
-  button.disabled=true;feedback("جاري تجهيز صور المنتجات…");
-  try{
-    if(!await canOrder())return;
-    const urls=[...new Set(Object.keys(src).map(key=>resolveItem(key)?.image).filter(Boolean))];
-    const files=[];let bytes=0;
-    // Limit memory and prepare batches in parallel, with links for any missing photos.
-    for(let i=0;i<Math.min(urls.length,10);i+=3){
-      const result=await Promise.allSettled(urls.slice(i,Math.min(i+3,10)).map(getSharePhoto));
-      for(const r of result){
-        if(r.status!=="fulfilled")continue;
-        const blob=r.value,ext=({"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"})[blob.type];
-        if(!ext||!blob.size||blob.size>5*1024*1024||bytes+blob.size>20*1024*1024)continue;
-        bytes+=blob.size;files.push(new File([blob],"product-"+(files.length+1)+"."+ext,{type:blob.type}));
-      }
-    }
-    if(!files.length){fallback("لم نتمكن من تجهيز الصور كملفات. استخدم إرسال الطلب النصي مع روابط الصور.");return;}
-    const payload={files,text:withPhotoLinks(text,src)+"\nرقم المتجر: +"+nums[0]};
-    if(!navigator.canShare(payload)){fallback("المشاركة غير مدعومة لهذه الصور؛ استخدم الطلب النصي.");return;}
-    if(!button.isConnected||signature!==JSON.stringify({items:orderItems(src),notes:quickSrc?"":($("cNotes")?.value||"").trim()}))return;
-    if(!await canOrder())return;
-    if(!button.isConnected||maintenance)return;
-    preparedShare={signature,payload,button,at:Date.now()};button.textContent=quickSrc?"📲 أرسل الصورة":"📲 إرسال الصور الآن — اختر WhatsApp";
-    feedback("تم تجهيز "+files.length+" من "+urls.length+" صورة. اضغط مجدداً، ثم اختر واتساب ومحادثة المتجر: +"+nums[0]+". روابط جميع الصور مرفقة في النص.");
-  }catch{fallback("تعذر تجهيز الصور؛ استخدم إرسال الطلب النصي وروابط الصور.");}
-  finally{button.disabled=false;}
+  return openWhatsapp(msg,items,notes);
 }
 
 /* ---------- التنقّل ---------- */
@@ -656,7 +574,7 @@ function pickVariant(vi) {
 
 /* ---------- السلة ---------- */
 function renderCart() {
-  resetShare(); pruneCart();
+  pruneCart();
   const keys = Object.keys(cart);
   if (!keys.length) {
     $("app").innerHTML = `<div class="empty"><h2 class="section-title center">سلة المشتريات فارغة</h2><p style="margin-top:10px">أضف بعض المنتجات لتبدأ.</p><button class="btn btn-primary" style="margin-top:14px" data-nav="">تصفّح المنتجات</button></div>`;
@@ -692,8 +610,7 @@ function renderCart() {
       <label class="label" for="cNotes">ملاحظات (اختياري)</label>
       <textarea class="field" id="cNotes" rows="2" maxlength="500" placeholder="مكان التوصيل، وقت مفضّل..."></textarea>
       <div id="cErr" class="err-msg"></div>
-      <button class="btn btn-wa" style="width:100%;margin-top:10px" id="checkoutBtn">📲 إتمام الطلب مع الصور</button>
-      <button type="button" class="btn btn-outline" style="width:100%;margin-top:8px" id="shareOrderBtn">إرسال الطلب النصي ورابط الصور عبر واتساب</button>
+      <button class="btn btn-wa" style="width:100%;margin-top:10px" id="checkoutBtn">📲 إتمام الطلب عبر واتساب</button>
       ${SETTINGS.deliveryNote ? `<p class="delivery-note">${esc(SETTINGS.deliveryNote)}</p>` : ""}
     </div>`;
 }
@@ -801,7 +718,6 @@ function initTheme() {
 document.addEventListener("click", (e) => {
   if(e.target.closest("#retryStoreBtn"))return refreshStoreStatus();
   if(!storeReady||maintenance)return;
-  if(e.target.closest("#shareOrderBtn"))return checkout();
   const imageTrigger=e.target.closest("[data-image-banner],[data-image-product],[data-image-current],[data-banner-set]");
   if(imageTrigger){
     const d=imageTrigger.dataset;
@@ -816,7 +732,7 @@ document.addEventListener("click", (e) => {
   if (d.open !== undefined) return go("product/" + d.open);
   if (d.step) { const [id, dir] = d.step.split("|"); return cardStep(+id, +dir); }
   if (d.add) return addToCart(+d.add, 1);
-  if (d.buy) return buyNowWA(+d.buy,t);
+  if (d.buy) return buyNowWA(+d.buy);
   if (d.var !== undefined) return pickVariant(+d.var);
   if (d.gstep) { const p = byId(curProductId()); if (!p) return; const n = [...new Set([...p.images,...(p.variants||[]).map(v=>v.image)].map(viewerURL).filter(Boolean))].length; if(n)return gSet((gImg + +d.gstep + n) % n);return; }
   if (d.gset !== undefined) return gSet(+d.gset);
@@ -825,7 +741,7 @@ document.addEventListener("click", (e) => {
   if (d.inquire) return inquireWA(+d.inquire);
   if (d.cstep) { const [key, dir] = d.cstep.split("|"); setQty(key, (cart[key] || 0) + +dir); return renderCart(); }
   if (d.cremove) { delete cart[d.cremove]; saveCart(); return renderCart(); }
-  if (t.id === "checkoutBtn") return prepareOrShare();
+  if (t.id === "checkoutBtn") return checkout();
 });
 $("themeBtn").addEventListener("click", () => {
   const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
