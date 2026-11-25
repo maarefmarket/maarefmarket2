@@ -3,6 +3,11 @@ import { sanitizeStore, str } from "./validate.js";
 const CURRENCIES = ["USD", "TRY", "SYP"];
 export function buildOrder(rawStore, body) {
   const data = sanitizeStore(rawStore);
+  if (body?.kind === "inquiry") {
+    const p = Number.isSafeInteger(body.id) && data.products.find(x => x.id === body.id && x.availability !== "out");
+    if (!p) throw new Error("Unavailable product");
+    return {kind:"inquiry",store:data.settings.storeName,text:"استفسار واتساب — "+p.name,items:[{id:p.id,name:p.name,image:p.images[0]||"",qty:1}],notes:""};
+  }
   if (!body || !Array.isArray(body.items) || !body.items.length || body.items.length > 50) throw new Error("Invalid order");
   const seen = new Set(), totals = {}, items = [];
   for (const entry of body.items) {
@@ -28,6 +33,12 @@ export function buildOrder(rawStore, body) {
   const fmt = (n, c) => new Intl.NumberFormat("en-US", {maximumFractionDigits: c === "SYP" ? 0 : 2}).format(n) + " " + ({USD:"$",TRY:"₺",SYP:"ل.س"}[c]);
   const notes = str(body.notes, 500);
   const lines = items.map(i => "• " + i.name + " × " + i.qty + " — " + fmt(i.unit,i.cur) + " = " + fmt(i.total,i.cur));
-  const text = ["طلب واتساب — بانتظار تأكيد العميل", ...lines, "", "الإجمالي:", ...CURRENCIES.filter(c => totals[c]).map(c => fmt(totals[c]/(c === "SYP" ? 1 : 100),c)), notes ? "ملاحظة العميل: " + notes : ""].join("\n").trim();
-  return {store:data.settings.storeName, text, items, notes};
+  const defaultTemplate = "السلام عليكم\nأريد شراء هذه الأشياء:\n\n{items}\n\nالسعر النهائي الإجمالي:\n{totals}\n\n{notes}\n\nشكراً لكم 🌿";
+  let template = data.settings.msgTemplate || defaultTemplate;
+  if (!template.includes("{items}")) template += "\n\n{items}";
+  if (!template.includes("{totals}")) template += "\n\nالسعر النهائي الإجمالي:\n{totals}";
+  if (notes && !template.includes("{notes}")) template += "\n\n{notes}";
+  const fields = {items:lines.join("\n"),totals:CURRENCIES.filter(c=>totals[c]).map(c=>fmt(totals[c]/(c==="SYP"?1:100),c)).join("\n"),notes:notes?"ملاحظة العميل: "+notes:"",store:data.settings.storeName};
+  const text="طلب واتساب — بانتظار تأكيد العميل\n"+template.replace(/\{(items|totals|notes|store)\}/g,(_,key)=>fields[key]).replace(/\n{3,}/g,"\n\n").trim();
+  return {kind:"order",store:data.settings.storeName,text,items,notes};
 }
