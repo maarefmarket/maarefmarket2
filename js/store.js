@@ -22,13 +22,31 @@ const state = { q: "", sort: "newest" };
 let storeReady=false, maintenance=false, statusBusy=false,catalogVersion=0,remoteVersion=0;
 const DEFAULT_MAINTENANCE="نعمل على تحسين المتجر، سنعود قريباً بإذن الله.";
 
+// Limit the entire response (including JSON parsing), not just headers.
+// The caller may cancel independently; late responses cannot resume checkout.
+async function requestJSON(url,options={},timeout=8000,parent){
+  const ctrl=new AbortController();
+  const cancel=()=>ctrl.abort();
+  if(parent?.aborted)throw Error("Request cancelled");
+  parent?.addEventListener("abort",cancel,{once:true});
+  let rejectAbort;
+  const aborted=new Promise((_,reject)=>{rejectAbort=()=>reject(Error("انتهت مهلة الاتصال أو أُلغي الطلب"));ctrl.signal.addEventListener("abort",rejectAbort,{once:true});});
+  const timer=setTimeout(cancel,timeout);
+  try{
+    return await Promise.race([(async()=>{
+      const res=await fetch(url,{...options,signal:ctrl.signal});
+      const data=await res.json();
+      return {res,data};
+    })(),aborted]);
+  }finally{
+    clearTimeout(timer);parent?.removeEventListener("abort",cancel);
+    ctrl.signal.removeEventListener("abort",rejectAbort);
+  }
+}
 async function loadData() {
   for (const url of ["/api/data"]) {
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      const res = await fetch(url, { cache: "no-store", signal: ctrl.signal }).finally(() => clearTimeout(timer));
-      const data = await res.json();
+      const {res,data}=await requestJSON(url,{cache:"no-store"},8000);
       if(data.settings?.maintenanceMode===true){
         SETTINGS=data.settings;applyTheme(SETTINGS.theme);
         renderMaintenance(SETTINGS.maintenanceMessage);return false;
@@ -50,13 +68,13 @@ async function loadData() {
     } catch (e) { console.warn("loadData fallback", url, e); }
   }
   storeReady=false;updateShopDock();
-  $("app").innerHTML = `<div class="empty"><h2 class="section-title center">تعذّر تحميل المتجر</h2><p style="margin-top:8px">حدّث الصفحة بعد قليل.</p></div>`;
+  $("app").innerHTML = `<div class="empty"><h2 class="section-title center">تعذّر تحميل المتجر</h2><p style="margin-top:8px">تحقق من اتصالك بالإنترنت ثم أعد المحاولة.</p><button type="button" class="btn btn-primary" id="retryStoreBtn">إعادة المحاولة</button></div>`;
   return false;
 }
 
 function renderMaintenance(message){
   maintenance=true;storeReady=false;stopBanner();
-  if(feedbackPending){feedbackPending=null;if($("feedbackDialog").open)$("feedbackDialog").close();}
+  cancelFeedback();
   if(imageViewer.open){viewerResume=false;imageViewer.close();}
   document.documentElement.classList.add("maintenance-mode");
   if($("categoryDialog")?.open)$("categoryDialog").close();
@@ -64,10 +82,10 @@ function renderMaintenance(message){
   $("app").innerHTML='<section class="maintenance-card" role="status"><img src="assets/logo.svg" alt=""><span class="maintenance-icon" aria-hidden="true">🛠️</span><h1>الموقع قيد الصيانة</h1><p id="maintenanceMessage"></p><button type="button" class="btn btn-primary" id="retryStoreBtn">إعادة المحاولة</button></section>';
   $("maintenanceMessage").textContent=message||DEFAULT_MAINTENANCE;
 }
-async function checkStoreStatus(){
-  const res=await fetch("/api/data?status=1",{cache:"no-store",signal:AbortSignal.timeout(5000)});
+async function checkStoreStatus(signal){
+  const {res,data:status}=await requestJSON("/api/data?status=1",{cache:"no-store"},5000,signal);
+  if(signal?.aborted)return false;
   if(!res.ok)throw Error("Status unavailable");
-  const status=await res.json();
   if(typeof status.maintenanceMode!=="boolean")throw Error("Invalid status");
   if(Number.isSafeInteger(status.version))remoteVersion=status.version;
   if(status.maintenanceMode){renderMaintenance(status.maintenanceMessage);return false;}
@@ -82,20 +100,18 @@ async function refreshStoreStatus(){
     }
   }catch{}finally{statusBusy=false;}
 }
-async function canOrder(){
-  if(!storeReady||maintenance)return false;
+async function canOrder(pending){
+  if(!storeReady||maintenance||!isCurrentFeedback(pending))return false;
   try {
-    if(!await checkStoreStatus())return false;
+    if(!await checkStoreStatus(pending?.controller.signal)||!isCurrentFeedback(pending))return false;
     if(remoteVersion!==catalogVersion){
-      const draft=$("feedbackText").value;
-      if(feedbackPending){feedbackPending=null;$("feedbackDialog").close();}
+      cancelFeedback();storeReady=false;updateShopDock();
       if(await loadData()){pruneCart();renderFooter();updateCartCount();route();}
-      if(draft)unsentFeedbackDraft=draft;
       toast("تم تحديث بيانات المتجر. راجع الأسعار والكميات وأعد الطلب.","err");return false;
     }
     return true;
   }
-  catch {toast("تعذر التحقق من حالة المتجر؛ حاول مرة أخرى","err");return false;}
+  catch {if(isCurrentFeedback(pending))toast("تعذر التحقق من حالة المتجر؛ حاول مرة أخرى","err");return false;}
 }
 
 /* ---------- الألوان المخصّصة من لوحة التحكم ---------- */
@@ -313,10 +329,10 @@ async function notifyBackground(items, notes, inquiryId) {
     if(!res.ok) console.warn("Order notification unavailable");
   } catch { console.warn("Order notification unavailable"); }
 }
-async function openWhatsapp(text, items, notes, inquiryId) {
+async function openWhatsapp(text, items, notes, inquiryId, pending) {
   const nums=whatsappNumbers();
   if(!nums.length){toast("لم يتم ضبط رقم واتساب","err");return false;}
-  if(!await canOrder())return false;
+  if(!await canOrder(pending)||!isCurrentFeedback(pending))return false;
   if(items?.length||inquiryId)notifyBackground(items,notes||"",inquiryId);
   location.assign("https://wa.me/"+nums[0]+"?text="+encodeURIComponent(text));
   return true;
@@ -354,40 +370,62 @@ function checkout() {
 }
 
 /* ---------- رأي الزبون الاختياري ---------- */
-let feedbackPending=null,feedbackBusy=false,unsentFeedbackDraft="";
-function showOrderFeedback(msg,items,notes){
-  if(feedbackPending||feedbackBusy||maintenance||!storeReady)return false;
+let feedbackPending=null,unsentFeedbackDraft="";
+function isCurrentFeedback(pending){
+  return !pending||(feedbackPending===pending&&!pending.controller.signal.aborted);
+}
+function cancelFeedback(){
+  const pending=feedbackPending;
+  feedbackPending=null;
+  if(pending){
+    if(!pending.saved)unsentFeedbackDraft=$("feedbackText").value;
+    pending.controller.abort();
+  }
   const dialog=$("feedbackDialog");
-  feedbackPending={msg,items,notes,id:Date.now()+"-"+crypto.randomUUID(),saved:false};
+  if(dialog.open)dialog.close();
+  $("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;
+  $("feedbackText").disabled=false;$("feedbackError").textContent="";
+}
+function showOrderFeedback(msg,items,notes){
+  if(feedbackPending||maintenance||!storeReady)return false;
+  const dialog=$("feedbackDialog");
+  if(dialog.open)return false;
+  feedbackPending={msg,items,notes,id:Date.now()+"-"+crypto.randomUUID(),saved:false,busy:false,controller:new AbortController()};
   $("feedbackText").value=unsentFeedbackDraft;unsentFeedbackDraft="";$("feedbackText").disabled=false;$("feedbackError").textContent="";
   $("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;
-  dialog.showModal();return true;
+  try{dialog.showModal();return true;}catch{cancelFeedback();toast("تعذر فتح نافذة الطلب، حاول مجدداً","err");return false;}
 }
 async function finishFeedback(send){
-  const pending=feedbackPending;if(!pending||feedbackBusy)return;
+  const pending=feedbackPending;if(!pending||pending.busy)return;
   const field=$("feedbackText"),error=$("feedbackError"),value=field.value.trim();
   if(send&&!value&&!pending.saved){error.textContent="اكتب اقتراحك أو اختر تخطي.";field.focus();return;}
-  feedbackBusy=true;$("feedbackSend").disabled=true;$("feedbackSkip").disabled=true;field.disabled=true;
+  pending.busy=true;$("feedbackSend").disabled=true;$("feedbackSkip").disabled=true;field.disabled=true;
+  error.textContent=send&&!pending.saved?"جاري التحقق من الطلب…":"جاري فتح الطلب…";
   try{
     if(send&&!pending.saved){
-      if(!await canOrder())return;
-      if(feedbackPending!==pending)return;
+      if(!await canOrder(pending)){
+        if(isCurrentFeedback(pending))error.textContent="تعذر التحقق من المتجر. أعد المحاولة أو ارجع لتعديل الطلب.";
+        return;
+      }
+      if(!isCurrentFeedback(pending))return;
       error.textContent="جاري حفظ رأيك…";
-      const res=await fetch("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:pending.id,text:value,items:pending.items}),signal:AbortSignal.timeout(7000)});
-      const j=await res.json().catch(()=>({}));
+      const {res,data:j}=await requestJSON("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:pending.id,text:value,items:pending.items})},7000,pending.controller.signal);
+      if(!isCurrentFeedback(pending))return;
       if(!res.ok||!j.ok)throw Error(j.error||"تعذر حفظ الرأي. يمكنك إعادة المحاولة أو التخطي.");
       pending.saved=true;error.textContent=j.preview?"معاينة: لم يُحفظ رأي حقيقي.":"شكراً لك، تم حفظ رأيك.";
     }
-    if(feedbackPending!==pending)return;
-    if(await openWhatsapp(pending.msg,pending.items,pending.notes)){
-      feedbackPending=null;$("feedbackDialog").close();
-    }else if(feedbackPending===pending)error.textContent=pending.saved?"تم حفظ رأيك، تعذر فتح الطلب. حاول المتابعة مجدداً.":"تعذر فتح الطلب حالياً. حاول مرة أخرى.";
-  }catch(e){if(feedbackPending===pending)error.textContent=e.message||"تعذر حفظ الرأي؛ أعد المحاولة أو تخطّ.";}
-  finally{feedbackBusy=false;$("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;field.disabled=!!feedbackPending?.saved;}
+    if(!isCurrentFeedback(pending))return;
+    if(await openWhatsapp(pending.msg,pending.items,pending.notes,undefined,pending)){
+      if(isCurrentFeedback(pending)){feedbackPending=null;unsentFeedbackDraft="";$("feedbackDialog").close();}
+    }else if(isCurrentFeedback(pending))error.textContent=pending.saved?"تم حفظ رأيك، تعذر فتح الطلب. حاول المتابعة مجدداً.":"تعذر فتح الطلب حالياً. أعد المحاولة أو ارجع لتعديل الطلب.";
+  }catch(e){if(isCurrentFeedback(pending))error.textContent=(e.message||"تعذر الاتصال")+" — يمكنك إعادة المحاولة أو التخطي أو الإغلاق.";}
+  finally{if(isCurrentFeedback(pending)){pending.busy=false;$("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;field.disabled=pending.saved;}}
 }
 $("feedbackForm").addEventListener("submit",e=>{e.preventDefault();finishFeedback(true);});
 $("feedbackSkip").addEventListener("click",()=>finishFeedback(false));
-$("feedbackDialog").addEventListener("cancel",e=>{e.preventDefault();if(!feedbackBusy)finishFeedback(false);});
+$("feedbackClose").addEventListener("click",cancelFeedback);
+$("feedbackDialog").addEventListener("cancel",e=>{e.preventDefault();cancelFeedback();});
+$("feedbackDialog").addEventListener("close",()=>{if(!$("feedbackDialog").open&&feedbackPending)cancelFeedback();});
 
 /* ---------- التنقّل ---------- */
 // الانتقال لأعلى الصفحة فوراً (بدون أنيميشن سحب) عند كل تنقّل داخل المتجر
@@ -406,10 +444,10 @@ function navTo(path) {
   go(path);
 }
 // زر الرجوع/التقدم في المتصفح أو تغيير الرابط يدوياً
-window.addEventListener("hashchange", () => { route(); jumpTop(); });
-window.addEventListener("popstate", () => { route(); jumpTop(); });
+window.addEventListener("hashchange", () => { cancelFeedback();route(); jumpTop(); });
+window.addEventListener("popstate", () => { cancelFeedback();route(); jumpTop(); });
 if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-window.addEventListener("pageshow", async (e) => { if (e.persisted && await loadData()) { loadCart(); pruneCart(); updateCartCount(); route(); } });
+window.addEventListener("pageshow", async (e) => { if(e.persisted){cancelFeedback();if(await loadData()){loadCart();pruneCart();updateCartCount();route();}} });
 
 /* ---------- المكوّنات ---------- */
 function renderChips(active) {

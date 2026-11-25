@@ -72,16 +72,17 @@ async function storefront(){
   const node=id=>nodes[id]??(nodes[id]={style:{},value:"",textContent:"",innerHTML:"",disabled:false,open:false,classList:{add(){},remove(){},toggle(){}},addEventListener(){},showModal(){this.open=true;},close(){this.open=false;},focus(){},removeAttribute(){}});
   const document={getElementById:node,querySelectorAll:()=>[],documentElement:node("html"),addEventListener(){},hidden:false};
   const location={href:"https://example.test/",origin:"https://example.test",hash:"",assign(url){this.assigned=url;}};
-  const calls=[];let fail=false,closed=false;
+  const calls=[];let fail=false,closed=false,intercept=null;const timers=new Map();let timerId=0;
   const fetch=async(url,opts)=>{
     calls.push({url,opts});
+    const custom=intercept?.(url,opts);if(custom)return custom;
     return {ok:url!=="/api/feedback"||!fail,json:async()=>url.includes("status=1")?{maintenanceMode:closed}:url==="/api/feedback"&&fail?{error:"failed"}:{ok:true}};
   };
-  const ctx={...money,...orderFormat,document,window:{addEventListener(){}},location,history:{},fetch,URL,AbortSignal,crypto:{randomUUID},console,setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){}};
+  const ctx={...money,...orderFormat,document,window:{addEventListener(){}},location,history:{},fetch,URL,AbortSignal,AbortController,crypto:{randomUUID},console,setInterval:()=>1,clearInterval(){},setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);}};
   const script=source.replace(/^import .*;\n/gm,"").split("(async function init()")[0]+
-    "\n({setup(d){SETTINGS=d.settings;PRODUCTS=d.products;cart={'1':2,'2':3};storeReady=true;},buyNowWA,finishFeedback,checkout,cartTotals,renderMaintenance,getCart:()=>cart,updateShopDock,updateCartCount,cardStep,cardHTML,openCategories});";
+    "\n({setup(d){SETTINGS=d.settings;PRODUCTS=d.products;cart={'1':2,'2':3};storeReady=true;},buyNowWA,finishFeedback,cancelFeedback,requestJSON,checkout,cartTotals,renderMaintenance,getCart:()=>cart,updateShopDock,updateCartCount,cardStep,cardHTML,openCategories});";
   const api=runInNewContext(script,ctx);api.setup(sanitizeStore(catalog));
-  return {api,node,calls,location,setFail(v){fail=v;},setClosed(v){closed=v;}};
+  return {api,node,calls,location,setFail(v){fail=v;},setClosed(v){closed=v;},intercept(fn){intercept=fn;},expire(ms){for(const [id,t] of timers){if(t.ms===ms){timers.delete(id);t.fn();}}}};
 }
 test("purchase opens optional feedback, skip sends no feedback and preserves all selected items",async()=>{
   const t=await storefront();
@@ -235,4 +236,89 @@ test("TRY prices, offers, variants and totals are whole multiples of five withou
     assert.equal(money.roundPrice(price,"TRY"),price);
     assert.ok(/^\d*[05]$/.test(money.formatAmount(price,"TRY")));
   }
+});
+
+const drain=async()=>{for(let i=0;i<24;i++)await Promise.resolve();};
+test("close returns without submitting and preserves cart, notes and unsent text",async()=>{
+  const t=await storefront();
+  t.node("cNotes").value="delivery note";
+  t.api.checkout();
+  t.node("feedbackText").value="draft";
+  t.api.cancelFeedback();
+  assert.equal(t.node("feedbackDialog").open,false);
+  assert.equal(t.calls.length,0);
+  assert.equal(t.node("cNotes").value,"delivery note");
+  assert.equal(t.api.getCart()["1"],2);
+  assert.equal(t.api.checkout(),true);
+  assert.equal(t.node("feedbackText").value,"draft");
+  assert.equal(t.node("feedbackSend").disabled,false);
+});
+test("cancel during a stalled status check prevents late WhatsApp and Telegram dispatch",async()=>{
+  const t=await storefront();let resolveOld;
+  t.intercept(url=>url.includes("status=1")?new Promise(resolve=>{resolveOld=resolve;}):null);
+  t.api.buyNowWA(1);
+  const old=t.api.finishFeedback(false);
+  await drain();
+  assert.equal(t.node("feedbackSkip").disabled,true);
+  assert.equal(t.node("feedbackClose").disabled,false);
+  t.api.cancelFeedback();
+  await old;
+  assert.equal(t.calls[0].opts.signal.aborted,true);
+  assert.equal(t.location.assigned,undefined);
+  t.intercept(null);
+  assert.equal(t.api.buyNowWA(1),true);
+  resolveOld({ok:true,json:async()=>({maintenanceMode:false})});
+  await drain();
+  assert.equal(t.node("feedbackDialog").open,true);
+  assert.equal(t.calls.filter(x=>x.url==="/api/notify").length,0);
+  await t.api.finishFeedback(false);
+  assert.equal(t.calls.filter(x=>x.url==="/api/notify").length,1);
+});
+test("close during a stalled feedback save cannot open WhatsApp after reopening",async()=>{
+  const t=await storefront();let resolveOld;
+  t.intercept(url=>url==="/api/feedback"?new Promise(resolve=>{resolveOld=resolve;}):null);
+  t.api.buyNowWA(1);
+  t.node("feedbackText").value="draft";
+  const old=t.api.finishFeedback(true);
+  await drain();
+  assert.equal(typeof resolveOld,"function");
+  t.api.cancelFeedback();
+  assert.equal(t.node("feedbackDialog").open,false);
+  await old;
+  t.intercept(null);
+  t.api.buyNowWA(1);
+  resolveOld({ok:true,json:async()=>({ok:true})});
+  await drain();
+  assert.equal(t.location.assigned,undefined);
+  assert.equal(t.node("feedbackDialog").open,true);
+  assert.equal(t.node("feedbackText").value,"draft");
+  assert.equal(t.node("feedbackSkip").disabled,false);
+  assert.equal(t.calls.filter(x=>x.url==="/api/notify").length,0);
+});
+test("status and feedback JSON body timeouts release controls, allow retry or skip",async()=>{
+  const t=await storefront();
+  t.intercept(url=>url.includes("status=1")?Promise.resolve({ok:true,json:()=>new Promise(()=>{})}):null);
+  t.api.buyNowWA(1);
+  const first=t.api.finishFeedback(false);
+  await drain();t.expire(5000);await first;
+  assert.equal(t.node("feedbackSkip").disabled,false);
+  assert.equal(t.location.assigned,undefined);
+  t.intercept(url=>url==="/api/feedback"?Promise.resolve({ok:true,json:()=>new Promise(()=>{})}):null);
+  t.node("feedbackText").value="test";
+  const second=t.api.finishFeedback(true);
+  await drain();t.expire(7000);await second;
+  assert.equal(t.node("feedbackSend").disabled,false);
+  assert.equal(t.node("feedbackText").disabled,false);
+  assert.equal(t.location.assigned,undefined);
+  t.intercept(null);
+  await t.api.finishFeedback(false);
+  assert.equal(t.calls.filter(x=>x.url==="/api/notify").length,1);
+});
+test("full catalog JSON timeout is bounded",async()=>{
+  const t=await storefront();
+  t.intercept(()=>Promise.resolve({ok:true,json:()=>new Promise(()=>{})}));
+  const request=t.api.requestJSON("/api/data",{},8000).then(()=>false,()=>true);
+  await drain();t.expire(8000);
+  assert.equal(await request,true);
+  assert.equal(t.calls[0].opts.signal.aborted,true);
 });
