@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
-import { json, noContent, corsHeaders, isSameOrigin, clientIp, rateLimit } from "../lib/auth.js";
+import { randomUUID } from "node:crypto";
+import { json, noContent, corsHeaders, isSameOrigin, clientIp, rateLimit, isProductionRequest } from "../lib/auth.js";
 import { buildOrder } from "../lib/order.js";
 
 async function telegram(token, method, payload) {
@@ -27,12 +28,22 @@ async function deliver(token, chatId, order, origin) {
   }
   const images = order.items.map(i => ({type:"photo",media:photoURL(i.image,origin),caption:Array.from(i.name+" × "+i.qty).slice(0,450).join("")})).filter(i => i.media);
   let photos = 0;
-  // Bound notification work; no more than 10 photos per request.
-  const selected = images.slice(0,10);
-  if (selected.length === 1) {
-    if (await telegram(token,"sendPhoto",{chat_id:chatId,photo:selected[0].media,caption:selected[0].caption})) photos=1;
-  } else if (selected.length > 1) {
-    if (await telegram(token,"sendMediaGroup",{chat_id:chatId,media:selected})) photos=selected.length;
+  // Send albums in chunks of up to ten, with a bounded number of requests.
+  for(let i=0;i<images.length;i+=10) {
+    const batch=images.slice(i,i+10);
+    const ok=batch.length===1
+      ? await telegram(token,"sendPhoto",{chat_id:chatId,photo:batch[0].media,caption:batch[0].caption})
+      : await telegram(token,"sendMediaGroup",{chat_id:chatId,media:batch});
+    if(ok)photos+=batch.length;
+    else {
+      const links=batch.map(x=>x.caption+"\n"+x.media);
+      let text="صور لم يتم إرفاقها — روابط الصور:";
+      for(const link of links){
+        if(text.length+link.length>3500){await telegram(token,"sendMessage",{chat_id:chatId,text,disable_web_page_preview:true});text="صور الطلب:";}
+        text+="\n"+link;
+      }
+      if(text.length>20)await telegram(token,"sendMessage",{chat_id:chatId,text,disable_web_page_preview:true});
+    }
   }
   return {sent:true,photos};
 }
@@ -43,7 +54,7 @@ export default async (req, context) => {
   if(!isSameOrigin(req,true)) return json({error:"غير مسموح"},403,cors);
   const origin = new URL(req.url).origin;
   const production = new URL(process.env.URL || "https://maarefmarket.netlify.app").origin;
-  if(origin!==production) return json({ok:true,preview:true},200,cors);
+  if(!isProductionRequest(req)) return json({ok:true,preview:true},200,cors);
   const rl = await rateLimit("notify",clientIp(req,context),{limit:10,windowMs:600000});
   if(!rl.allowed) return json({ok:false},429,{...cors,"Retry-After":String(rl.retryAfterSec)});
   let body;
@@ -59,9 +70,9 @@ export default async (req, context) => {
   if(!catalog) return json({ok:false},503,cors);
   let order;
   try { order=buildOrder(catalog,body); } catch { return json({error:"بيانات الطلب غير صالحة"},400,cors); }
-  if(process.env.WA_LOG==="1") {
+  if(process.env.WA_LOG==="1" && order.kind==="order") {
     try {
-      const key="order-"+Date.now()+"-"+crypto.randomUUID()+".json";
+      const key="order-"+Date.now()+"-"+randomUUID()+".json";
       await getStore({name:"campuskart-orders"}).setJSON(key,{timestamp:new Date().toISOString(),store:order.store,text:order.text,items:order.items});
     } catch { console.error("Order logging failed"); }
   }
@@ -71,4 +82,4 @@ export default async (req, context) => {
   const results=await Promise.all(chats.map(id=>deliver(token,id,order,production)));
   return json({ok:results.some(r=>r.sent),sent:results.filter(r=>r.sent).length,photos:results.reduce((n,r)=>n+r.photos,0)},200,cors);
 };
-export const config={path:"/api/notify"};
+export const config={path:"/api/notify",rateLimit:{windowLimit:20,windowSize:60,aggregateBy:["ip","domain"]}};
