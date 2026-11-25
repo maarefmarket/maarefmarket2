@@ -21,7 +21,7 @@ function photoURL(value, origin) {
 }
 const IMAGE_NAME = /^\/api\/image\/([a-z0-9]{6,40}\.(jpg|png|webp|gif))$/;
 const IMAGE_MIME = {jpg:"image/jpeg",png:"image/png",webp:"image/webp",gif:"image/gif"};
-function internalImage(value,origin) {
+export function internalImage(value,origin) {
   try {
     const u=new URL(value,origin);
     return u.origin===origin&&!u.search&&!u.hash?IMAGE_NAME.exec(u.pathname):null;
@@ -45,7 +45,7 @@ async function loadPhotos(order,origin){
   }
   return images;
 }
-async function sendBatch(token,chatId,batch){
+export async function sendBatch(token,chatId,batch){
   if(batch.length===1){
     const i=batch[0];
     if(!i.file)return telegram(token,"sendPhoto",{chat_id:chatId,photo:i.url,caption:i.caption});
