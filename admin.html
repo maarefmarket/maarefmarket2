@@ -127,7 +127,7 @@
       </div>
       <div class="card accent">
         <h3>⚠️ تطبيق على جميع المنتجات</h3>
-        <p style="margin:0 0 10px;font-size:13.5px;line-height:1.8">ستُعاد حسابة أسعار العملتين الأخريين لـ <strong id="rCountLabel">كلّ</strong> المنتجات اعتماداً على سعرها بالعملة المرجعية. السوري لأقرب 10 ليرات، والتركي لأقرب 0.5 ليرة، والدولار لأقرب 0.01. عند المنتصف يكون التقريب للأعلى. يتم تحديث الأسعار تلقائياً عند الحفظ؛ ويمكن معاينتها محلياً أولاً.</p>
+        <p style="margin:0 0 10px;font-size:13.5px;line-height:1.8">ستُعاد حسابة أسعار العملتين الأخريين لـ <strong id="rCountLabel">كلّ</strong> المنتجات اعتماداً على سعرها بالعملة المرجعية. السوري لأقرب 10 ليرات، والتركي لأقرب 5 ليرات كاملة (دون فواصل، والحد الأدنى للسعر الموجب 5 ليرات)، والدولار لأقرب 0.01. عند المنتصف يكون التقريب للأعلى. يتم تحديث الأسعار تلقائياً عند الحفظ؛ ويمكن معاينتها محلياً أولاً.</p>
         <button class="btn btn-primary" data-action="apply-rates">🔄 تطبيق أسعار الصرف على جميع المنتجات</button>
       </div>
       <div class="card"><h3>👁 معاينة</h3><div id="ratesPreview" style="line-height:2;font-size:14px"></div></div>
@@ -294,12 +294,12 @@
     </div>
     <div class="row cols-3 mt">
       <div><div class="label label-row"><span>السعر ($)</span><label class="check-sm"><input type="checkbox" id="mpShowUSD" checked><span>إظهار</span></label></div><input id="mpPriceUSD" type="text" inputmode="decimal" class="field" placeholder="1.50"></div>
-      <div><div class="label label-row"><span>السعر (₺)</span><label class="check-sm"><input type="checkbox" id="mpShowTRY" checked><span>إظهار</span></label></div><input id="mpPriceTRY" type="text" inputmode="decimal" class="field" placeholder="49.5"></div>
+      <div><div class="label label-row"><span>السعر (₺)</span><label class="check-sm"><input type="checkbox" id="mpShowTRY" checked><span>إظهار</span></label></div><input id="mpPriceTRY" type="text" inputmode="numeric" class="field" placeholder="50"></div>
       <div><div class="label label-row"><span>السعر (ل.س)</span><label class="check-sm"><input type="checkbox" id="mpShowSYP" checked><span>إظهار</span></label></div><input id="mpPriceSYP" type="text" inputmode="decimal" class="field" placeholder="21000"></div>
     </div>
     <div class="row cols-3 mt">
       <div><label class="label">السعر القديم ($) — للعروض</label><input id="mpOldUSD" type="text" inputmode="decimal" class="field" placeholder="اختياري"></div>
-      <div><label class="label">السعر القديم (₺)</label><input id="mpOldTRY" type="text" inputmode="decimal" class="field" placeholder="اختياري"></div>
+      <div><label class="label">السعر القديم (₺)</label><input id="mpOldTRY" type="text" inputmode="numeric" class="field" placeholder="اختياري"></div>
       <div><label class="label">السعر القديم (ل.س)</label><input id="mpOldSYP" type="text" inputmode="decimal" class="field" placeholder="اختياري"></div>
     </div>
     <div class="hint mt">تُحسب أسعار التركي والسوري من الدولار عند ضبط أسعار الصرف. يمكن التحكم بظهورها دون تغيير الحساب.</div>
