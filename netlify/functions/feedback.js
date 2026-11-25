@@ -15,11 +15,15 @@ export function makeRecord(catalog,body,now=new Date()){
   if(!text||text.length>MAX_TEXT)throw Error("Invalid feedback length");
   const m=ID_RE.exec(String(body.id||""));
   if(!m||Math.abs(now.getTime()-Number(m[1]))>15*60*1000)throw Error("Invalid feedback id");
-  const order=buildOrder(catalog,{items:body.items,notes:""});
+  if(catalog?.settings?.maintenanceMode===true)throw Error("Store under maintenance");
+  const general=body.kind==="general";
+  if(body.kind!==undefined&&body.kind!=="order"&&!general)throw Error("Invalid feedback kind");
+  if(general&&(!Array.isArray(body.items)||body.items.length))throw Error("General feedback cannot contain order items");
+  const order=general?{items:[]}:buildOrder(catalog,{items:body.items,notes:""});
   const key="feedback/"+monthKey(new Date(Number(m[1])))+"/"+m[0].toLowerCase()+".json";
   // Only the opinion and intended product selections are persisted. No IP,
   // name, contact details, user-agent, order notes or account identifier.
-  return {key,record:{timestamp:now.toISOString(),text,items:order.items.map(({id,variant,name,qty,cur,unit,total})=>({id,variant,name,qty,cur,unit,total})),status:"order-attempt"}};
+  return {key,record:{timestamp:now.toISOString(),text,items:order.items.map(({id,variant,name,qty,cur,unit,total})=>({id,variant,name,qty,cur,unit,total})),status:general?"general-feedback":"order-attempt"}};
 }
 export default async(req,context)=>{
   const cors=corsHeaders(req,"GET, POST, OPTIONS");
@@ -47,7 +51,7 @@ export default async(req,context)=>{
   const secret=process.env.SESSION_SECRET||process.env.ADMIN_PASSWORD||"campuskart-feedback";
   const bucket=createHmac("sha256",secret).update(new Date().toISOString().slice(0,10)+"|"+clientIp(req,context)).digest("hex");
   const rl=await rateLimit("feedback",bucket,{limit:15,windowMs:600000});
-  if(!rl.allowed)return json({error:"محاولات كثيرة، حاول لاحقاً أو تخطّ الخطوة"},429,{...cors,"Retry-After":String(rl.retryAfterSec)});
+  if(!rl.allowed)return json({error:"محاولات كثيرة، حاول لاحقاً"},429,{...cors,"Retry-After":String(rl.retryAfterSec)});
   let body;
   try{
     if(Number(req.headers.get("content-length")||0)>16000)return json({error:"الطلب كبير"},413,cors);
@@ -57,10 +61,10 @@ export default async(req,context)=>{
   try{
     const catalog=await getStore({name:"campuskart-data",consistency:"strong"}).get("store.json",{type:"json"});
     if(!catalog||catalog.settings?.maintenanceMode===true)return json({error:"المتجر غير متاح حالياً"},503,cors);
-    let entry;try{entry=makeRecord(catalog,body);}catch{return json({error:"تعذر حفظ الرأي: تحقق من النص والطلب"},400,cors);}
+    let entry;try{entry=makeRecord(catalog,body);}catch{return json({error:"تعذر حفظ الرأي: تحقق من النص والبيانات"},400,cors);}
     const store=getStore({name:STORE,consistency:"strong"});
     await store.setJSON(entry.key,entry.record,{onlyIfNew:true});
     return json({ok:true},200,cors);
-  }catch{console.error("Feedback save unavailable");return json({error:"تعذر حفظ الرأي؛ أعد المحاولة أو تخطّ"},503,cors);}
+  }catch{console.error("Feedback save unavailable");return json({error:"تعذر حفظ الرأي؛ أعد المحاولة"},503,cors);}
 };
 export const config={path:"/api/feedback",rateLimit:{windowLimit:30,windowSize:60,aggregateBy:["ip","domain"]}};
