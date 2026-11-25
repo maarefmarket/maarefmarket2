@@ -317,14 +317,17 @@ async function openWhatsapp(text, items, notes, inquiryId) {
   location.assign("https://wa.me/"+nums[0]+"?text="+encodeURIComponent(text));
   return true;
 }
-function buyNowWA(id) {
+function buyNowWA(id,button) {
   const p=byId(id); if(!p)return;
   let vi=-1;
   if(p.variants?.length){vi=p.variants.findIndex(v=>v.availability!=="out");if(vi<0)vi=0;}
   const key=vKey(id,vi),it=resolveItem(key);
   if(!it||it.availability==="out"){toast("غير متوفر","err");return;}
   const src={[key]:1},msg=buildOrderMessage("",src);
-  if(msg)openWhatsapp(withPhotoLinks(msg,src),orderItems(src),"");
+  if(msg){
+    if(navigator.share&&navigator.canShare&&button)return prepareOrShare(src,button);
+    openWhatsapp(withPhotoLinks(msg,src),orderItems(src),"");
+  }
 }
 function inquireWA(id) {
   const p=byId(id);if(!p)return;
@@ -371,30 +374,34 @@ async function getSharePhoto(value){
     };img.src=url;
   });
 }
-async function prepareOrShare(){
-  const button=$("checkoutBtn"),err=$("cErr");
-  if(!button||!err||maintenance)return;
-  const notes=($("cNotes")?.value||"").trim(),items=orderItems(cart),text=buildOrderMessage(notes),nums=whatsappNumbers();
-  if(!nums.length||!items.length||items.length>50){err.textContent="تحقق من السلة ورقم واتساب";return;}
+async function prepareOrShare(quickSrc=null,quickButton=null){
+  const button=quickButton||$("checkoutBtn"),err=quickSrc?null:$("cErr");
+  if(!button||maintenance)return;
+  const src=quickSrc||cart;
+  const originalLabel=quickSrc?"📲 اطلب":"📲 إتمام الطلب مع الصور";
+  const feedback=(message)=>{if(err)err.textContent=message;else toast(message);};
+  const fallback=(message)=>{feedback(message);if(quickSrc&&confirm("تعذر إرفاق الصور مباشرة. هل تريد إرسال الطلب النصي وروابط الصور عبر واتساب؟"))openWhatsapp(withPhotoLinks(text,src),items,notes);};
+  const notes=quickSrc?"":($("cNotes")?.value||"").trim(),items=orderItems(src),text=buildOrderMessage(notes,src),nums=whatsappNumbers();
+  if(!nums.length||!items.length||items.length>50){feedback("تحقق من الطلب ورقم واتساب");return;}
   const signature=JSON.stringify({items,notes});
-  if(preparedShare?.signature===signature&&Date.now()-preparedShare.at<30000){
+  if(preparedShare?.signature===signature&&preparedShare.button===button&&Date.now()-preparedShare.at<30000){
     try{
       await navigator.share(preparedShare.payload);
       notifyBackground(items,notes);resetShare();
-      if(button.isConnected)button.textContent="📲 إتمام الطلب مع الصور";
-      err.textContent="تم فتح المشاركة؛ تأكد من إرسال الطلب في المحادثة.";
-    }catch(e){if(e.name!=="AbortError")err.textContent="تعذرت المشاركة؛ استخدم زر الطلب النصي وروابط الصور.";}
+      if(button.isConnected)button.textContent=originalLabel;
+      feedback("تم فتح المشاركة؛ تأكد من إرسال الطلب في المحادثة.");
+    }catch(e){if(e.name!=="AbortError")fallback("تعذرت المشاركة؛ استخدم الطلب النصي وروابط الصور.");}
     return;
   }
-  if(!navigator.share||!navigator.canShare){err.textContent="متصفحك لا يدعم إرفاق الملفات مباشرة. استخدم زر الطلب النصي وروابط الصور.";return;}
-  button.disabled=true;err.textContent="جاري تجهيز صور المنتجات…";
+  if(!navigator.share||!navigator.canShare){fallback("متصفحك لا يدعم إرفاق الملفات مباشرة. استخدم الطلب النصي وروابط الصور.");return;}
+  button.disabled=true;feedback("جاري تجهيز صور المنتجات…");
   try{
     if(!await canOrder())return;
-    const urls=[...new Set(Object.keys(cart).map(key=>resolveItem(key)?.image).filter(Boolean))];
+    const urls=[...new Set(Object.keys(src).map(key=>resolveItem(key)?.image).filter(Boolean))];
     const files=[];let bytes=0;
     // Limit memory and prepare batches in parallel, with links for any missing photos.
     for(let i=0;i<Math.min(urls.length,10);i+=3){
-      const result=await Promise.allSettled(urls.slice(i,i+3).map(getSharePhoto));
+      const result=await Promise.allSettled(urls.slice(i,Math.min(i+3,10)).map(getSharePhoto));
       for(const r of result){
         if(r.status!=="fulfilled")continue;
         const blob=r.value,ext=({"image/jpeg":"jpg","image/png":"png","image/webp":"webp","image/gif":"gif"})[blob.type];
@@ -402,14 +409,15 @@ async function prepareOrShare(){
         bytes+=blob.size;files.push(new File([blob],"product-"+(files.length+1)+"."+ext,{type:blob.type}));
       }
     }
-    if(!files.length){err.textContent="لم نتمكن من تجهيز الصور كملفات. استخدم إرسال الطلب النصي مع روابط الصور.";return;}
-    const payload={files,text:withPhotoLinks(text,cart)+"\nرقم المتجر: +"+nums[0]};
-    if(!navigator.canShare(payload)){err.textContent="المشاركة غير مدعومة لهذه الصور؛ استخدم زر الطلب النصي.";return;}
-    if(!button.isConnected||signature!==JSON.stringify({items:orderItems(cart),notes:($("cNotes")?.value||"").trim()}))return;
+    if(!files.length){fallback("لم نتمكن من تجهيز الصور كملفات. استخدم إرسال الطلب النصي مع روابط الصور.");return;}
+    const payload={files,text:withPhotoLinks(text,src)+"\nرقم المتجر: +"+nums[0]};
+    if(!navigator.canShare(payload)){fallback("المشاركة غير مدعومة لهذه الصور؛ استخدم الطلب النصي.");return;}
+    if(!button.isConnected||signature!==JSON.stringify({items:orderItems(src),notes:quickSrc?"":($("cNotes")?.value||"").trim()}))return;
     if(!await canOrder())return;
-    preparedShare={signature,payload,at:Date.now()};button.textContent="📲 إرسال الصور الآن — اختر WhatsApp";
-    err.textContent="تم تجهيز "+files.length+" من "+urls.length+" صورة. اضغط مجدداً، ثم اختر واتساب ومحادثة المتجر: +"+nums[0]+". روابط جميع الصور مرفقة في النص.";
-  }catch{err.textContent="تعذر تجهيز الصور؛ استخدم إرسال الطلب النصي وروابط الصور.";}
+    if(!button.isConnected||maintenance)return;
+    preparedShare={signature,payload,button,at:Date.now()};button.textContent=quickSrc?"📲 أرسل الصورة":"📲 إرسال الصور الآن — اختر WhatsApp";
+    feedback("تم تجهيز "+files.length+" من "+urls.length+" صورة. اضغط مجدداً، ثم اختر واتساب ومحادثة المتجر: +"+nums[0]+". روابط جميع الصور مرفقة في النص.");
+  }catch{fallback("تعذر تجهيز الصور؛ استخدم إرسال الطلب النصي وروابط الصور.");}
   finally{button.disabled=false;}
 }
 
@@ -806,7 +814,7 @@ document.addEventListener("click", (e) => {
   if (d.open !== undefined) return go("product/" + d.open);
   if (d.step) { const [id, dir] = d.step.split("|"); return cardStep(+id, +dir); }
   if (d.add) return addToCart(+d.add, 1);
-  if (d.buy) return buyNowWA(+d.buy);
+  if (d.buy) return buyNowWA(+d.buy,t);
   if (d.var !== undefined) return pickVariant(+d.var);
   if (d.gstep) { const p = byId(curProductId()); if (!p) return; const n = [...new Set([...p.images,...(p.variants||[]).map(v=>v.image)].map(viewerURL).filter(Boolean))].length; if(n)return gSet((gImg + +d.gstep + n) % n);return; }
   if (d.gset !== undefined) return gSet(+d.gset);
