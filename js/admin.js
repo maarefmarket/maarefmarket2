@@ -390,7 +390,7 @@ function renderVariants() {
           <option value="limited" ${v.availability === "limited" ? "selected" : ""}>كمية محدودة</option><option value="out" ${v.availability === "out" ? "selected" : ""}>غير متوفر</option></select></div>
       </div>
       <div class="row cols-3 mt">
-        ${CURS.map((c) => `<div><label class="label">السعر (${CUR_SYM[c]})</label><input class="field" inputmode="decimal" value="${v.prices?.[c]?formatAmount(v.prices[c],c):""}" ${c!=="USD"&&normalizeRates(DATA.settings.rates)["USD_"+c]?"readonly":""} data-var-field="${i}|price${c}" placeholder="اختياري"></div>`).join("")}
+        ${CURS.map((c) => `<div><label class="label">السعر (${CUR_SYM[c]})</label><input class="field" inputmode="${c==="TRY"?"numeric":"decimal"}" value="${v.prices?.[c]?formatAmount(v.prices[c],c):""}" ${c!=="USD"&&normalizeRates(DATA.settings.rates)["USD_"+c]?"readonly":""} data-var-field="${i}|price${c}" placeholder="اختياري"></div>`).join("")}
       </div>
       <div class="row mt"><div><label class="label">رابط صورة النوع (اختياري)</label><input class="field" dir="ltr" maxlength="2048" value="${esc(v.image || "")}" data-var-field="${i}|image" placeholder="https://..."></div></div>
       <div class="item-actions mt"><button type="button" class="btn btn-danger btn-sm" data-remove-variant="${i}">🗑 حذف النوع</button></div>
