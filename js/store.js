@@ -339,6 +339,7 @@ function checkout() {
   const items=orderItems(cart),msg=buildOrderMessage(notes);
   if(!msg||!items.length){err.textContent="السلة فارغة";return;}
   if(items.length>50){err.textContent="يرجى تقسيم الطلب إلى 50 صنفاً كحد أقصى";return;}
+  if(Object.keys(cart).some(k=>{const it=resolveItem(k);return !it||it.availability==="out"||!billingCur(it);})){err.textContent="يوجد منتج غير متوفر أو سعره غير محدد؛ راجع السلة.";return;}
   openWhatsapp(withPhotoLinks(msg,cart),items,notes);
 }
 
@@ -383,6 +384,7 @@ async function prepareOrShare(quickSrc=null,quickButton=null){
   const fallback=(message)=>{feedback(message);if(quickSrc&&confirm("تعذر إرفاق الصور مباشرة. هل تريد إرسال الطلب النصي وروابط الصور عبر واتساب؟"))openWhatsapp(withPhotoLinks(text,src),items,notes);};
   const notes=quickSrc?"":($("cNotes")?.value||"").trim(),items=orderItems(src),text=buildOrderMessage(notes,src),nums=whatsappNumbers();
   if(!nums.length||!items.length||items.length>50){feedback("تحقق من الطلب ورقم واتساب");return;}
+  if(Object.keys(src).some(k=>{const it=resolveItem(k);return !it||it.availability==="out"||!billingCur(it);})){feedback("يوجد منتج غير متوفر أو سعره غير محدد؛ راجع الطلب.");return;}
   const signature=JSON.stringify({items,notes});
   if(preparedShare?.signature===signature&&preparedShare.button===button&&Date.now()-preparedShare.at<30000){
     try{
