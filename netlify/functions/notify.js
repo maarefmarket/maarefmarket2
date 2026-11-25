@@ -1,3 +1,4 @@
+import { formatOrderCaption, splitOrderText } from "../../js/order-format.js";
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "node:crypto";
 import { json, noContent, corsHeaders, isSameOrigin, clientIp, rateLimit, isProductionRequest } from "../lib/auth.js";
@@ -28,7 +29,7 @@ export function internalImage(value,origin) {
   }catch{return null;}
 }
 async function loadPhotos(order,origin){
-  const images=order.items.map(i=>({url:photoURL(i.image,origin),caption:Array.from(i.name+" × "+i.qty).slice(0,450).join(""),image:i.image})).filter(i=>i.url);
+  const images=order.items.map(i=>({url:photoURL(i.image,origin),caption:formatOrderCaption(i),image:i.image})).filter(i=>i.url);
   const store=getStore({name:"campuskart-images",consistency:"strong"});
   // Read stored photos directly. Never fetch arbitrary external URLs on the server.
   // Bound the total file payload; remaining images can still be sent by URL.
@@ -63,9 +64,8 @@ export async function sendBatch(token,chatId,batch){
   form.set("media",JSON.stringify(media));return telegram(token,"sendMediaGroup",form);
 }
 async function deliver(token,chatId,order,images){
-  const chars=Array.from(order.text);
-  for(let i=0;i<chars.length;i+=1800){
-    if(!await telegram(token,"sendMessage",{chat_id:chatId,text:chars.slice(i,i+1800).join(""),disable_web_page_preview:true}))return {sent:false,photos:0};
+  for(const text of splitOrderText(order.text)){
+    if(!await telegram(token,"sendMessage",{chat_id:chatId,text,disable_web_page_preview:true}))return {sent:false,photos:0};
   }
   let photos=0;const failed=[];const deadline=Date.now()+16000;
   for(let i=0;i<images.length;i+=5){
