@@ -6,7 +6,7 @@ const RTL="\u200f", LRI="\u2066", FSI="\u2068", PDI="\u2069";
 const inline=value=>String(value??"").replace(/[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,"").replace(/\s+/gu," ").trim();
 const name=value=>FSI+inline(value)+PDI;
 const number=value=>LRI+inline(value)+PDI;
-const amount=(value,cur)=>number(formatMoney(value,cur).replace(/ /g,"\u00a0"));
+const amount=(value,cur)=>LRI+formatMoney(value,cur).replace(/ /g,"\u00a0")+PDI;
 const labels={USD:"بالدولار",TRY:"بالتركي",SYP:"بالسوري"};
 export function formatOrderItem(item,{bold=false}={}){
   const title=name(item.name);
