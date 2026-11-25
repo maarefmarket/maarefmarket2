@@ -55,12 +55,12 @@ export default async (req, context) => {
   /* ---------------------------- GET ---------------------------- */
   if (method === "GET") {
     try {
-      let rec = await store.getWithMetadata(KEY, { type: "json" }).catch(() => null);
+      let rec = await store.getWithMetadata(KEY, { type: "json" });
       let data = rec?.data || null;
       let version = Number(rec?.metadata?.version) || 0;
 
       if (!data) {
-        const backup = await store.get(BACKUP_KEY, { type: "json" }).catch(() => null);
+        const backup = await store.get(BACKUP_KEY, { type: "json" });
         data = sanitizeStore(backup || (await loadDefaults()));
         version = Date.now();
         await store.setJSON(KEY, data, { metadata: { version: String(version) } });
@@ -93,7 +93,7 @@ export default async (req, context) => {
 
     let raw;
     try { raw = await req.text(); } catch { return json({ error: "تعذّر قراءة الطلب" }, 400, cors); }
-    if (raw.length > LIMITS.bodyBytes) return json({ error: "حجم البيانات كبير جداً (الحدّ 3MB)" }, 413, cors);
+    if (Buffer.byteLength(raw, "utf8") > LIMITS.bodyBytes) return json({ error: "حجم البيانات كبير جداً (الحدّ 3MB)" }, 413, cors);
 
     let body;
     try { body = JSON.parse(raw); } catch { return json({ error: "JSON غير صالح" }, 400, cors); }
@@ -102,7 +102,7 @@ export default async (req, context) => {
     const clean = sanitizeStore(body);
 
     try {
-      const currentRec = await store.getWithMetadata(KEY, { type: "json" }).catch(() => null);
+      const currentRec = await store.getWithMetadata(KEY, { type: "json" });
       const currentVersion = Number(currentRec?.metadata?.version) || 0;
       const baseVersion = Number(req.headers.get("x-base-version") || 0);
       const force = req.headers.get("x-force") === "1";
