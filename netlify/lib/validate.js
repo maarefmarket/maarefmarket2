@@ -1,3 +1,4 @@
+import { roundPrice, normalizeCatalogPricing, normalizeRates } from "../../js/money.js";
 /**
  * تحقّق وتنظيف عميق لبيانات المتجر قبل حفظها.
  * يمنع حقن روابط javascript:, النصوص العملاقة, والأنواع الخاطئة.
@@ -79,7 +80,7 @@ export function digits(v, max = 20) {
 function prices(v) {
   const p = v && typeof v === "object" ? v : {};
   const out = {};
-  for (const c of CURS) out[c] = c === "SYP" ? num(p[c], { int: true }) : num(p[c]);
+  for (const c of CURS) out[c] = roundPrice(p[c],c);
   return out;
 }
 
@@ -140,12 +141,7 @@ export function sanitizeStore(input) {
   const whatsapps = (Array.isArray(s.whatsapps) ? s.whatsapps : [s.whatsapp])
     .map((x) => digits(x)).filter((x) => x.length >= 7).slice(0, LIMITS.whatsapps);
 
-  const rates = {};
-  if (s.rates && typeof s.rates === "object") {
-    for (const k of Object.keys(s.rates).slice(0, 12)) {
-      if (/^[A-Z]{3}_[A-Z]{3}$/.test(k)) rates[k] = num(s.rates[k], { max: 1e9 });
-    }
-  }
+  const rates = normalizeRates(s.rates);
 
   const settings = {
     storeName: str(s.storeName, LIMITS.short) || "CampusKart",
@@ -160,7 +156,7 @@ export function sanitizeStore(input) {
     maintenanceMode: s.maintenanceMode === true,
     maintenanceMessage: str(s.maintenanceMessage, LIMITS.medium),
     msgTemplate: str(s.msgTemplate, LIMITS.template),
-    baseCurrency: CURS.includes(s.baseCurrency) ? s.baseCurrency : "USD",
+    baseCurrency: "USD",
     rates,
   };
   const theme = sanitizeTheme(s.theme);
@@ -192,7 +188,7 @@ export function sanitizeStore(input) {
     .map((p, i) => product(p, i, seenIds))
     .filter(Boolean);
 
-  return { settings, banners, categories, products };
+  return normalizeCatalogPricing({ settings, banners, categories, products });
 }
 
 /** فحص البنية العامة قبل التنظيف */
