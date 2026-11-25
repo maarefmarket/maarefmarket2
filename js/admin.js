@@ -121,6 +121,7 @@ async function loadData() {
   toast("جاري التحميل...", "info");
   try {
     const res = await fetch("/api/data", { cache: "no-store", headers: authHeaders() });
+    if (res.status === 401) { handleUnauthorized(); return; }
     if (!res.ok) throw new Error("HTTP " + res.status);
     const j = await res.json();
     VERSION = Number(j._version) || 0; delete j._version;
