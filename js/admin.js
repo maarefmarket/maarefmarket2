@@ -136,7 +136,8 @@ async function saveAll(force = false) {
   if (!DATA) return;
   $("saveBtnTop").disabled = true; toast("جاري الحفظ...", "info");
   try {
-    const draft=deepClone(DATA);
+    const before=JSON.stringify(DATA),draft=deepClone(DATA);
+    if(["USD_TRY","USD_SYP"].some(k=>decimal(draft.settings.rates?.[k])>1e9))throw Error("سعر الصرف خارج النطاق المدعوم");
     const rates=normalizeRates(draft.settings.rates),previous=normalizeRates(SAVED_DATA?.settings?.rates);
     if(JSON.stringify(rates)!==JSON.stringify(previous)&&(!rates.USD_TRY||!rates.USD_SYP))throw Error("أدخل سعري صرف الدولار بشكل صحيح");
     normalizeCatalogPricing(draft,previous);
@@ -153,7 +154,10 @@ async function saveAll(force = false) {
     }
     if (!res.ok) throw new Error(j.error || "HTTP " + res.status);
     VERSION = Number(j.version) || VERSION;
-    DATA=draft; SAVED_DATA = deepClone(DATA); renderProducts(); renderRates(); updateDirty(); renderMaintenanceStatus();
+    const unchanged=JSON.stringify(DATA)===before;
+    SAVED_DATA=deepClone(draft);
+    if(unchanged){DATA=draft;renderProducts();renderRates();}
+    updateDirty();renderMaintenanceStatus();
     toast("✓ تم الحفظ ونُشر للجميع", "success");
   } catch (e) { toast("فشل الحفظ: " + (e.message || e), "error"); }
   finally { $("saveBtnTop").disabled = false; }
@@ -240,10 +244,24 @@ function openSiblingModal(src) {
   $("mpAvail").value = src.availability || "in";
   $("mpDesc").value = src.description || "";
   $("mpName").value = ""; $("mpName").focus();
+  syncProductPriceInputs("mpPrice",true);
   refreshGroupMembers();
   toast("اكتب اسم النوع الجديد وارفع صورته", "info");
 }
 
+function syncProductPriceInputs(prefix,formatUSD=false){
+  const rates=normalizeRates(DATA?.settings?.rates);
+  const usdField=$(prefix+"USD"),usd=roundPrice(usdField.value,"USD");
+  if(formatUSD)usdField.value=usd?formatAmount(usd,"USD"):"";
+  for(const c of ["TRY","SYP"]){
+    const input=$(prefix+c),rate=rates["USD_"+c];
+    input.readOnly=!!rate;
+    if(rate){
+      try{input.value=usd?formatAmount(convertUSD(usd,rate,c),c):"";}
+      catch{input.value="";toast("السعر المحوّل خارج النطاق المدعوم","error");}
+    }else if(formatUSD){const value=roundPrice(input.value,c);input.value=value?formatAmount(value,c):"";}
+  }
+}
 function openProductModal(id) {
   editingProductId = id || null; mpImages = []; mpVariants = [];
   const set = (k, v) => ($(k).value = v ?? "");
@@ -267,6 +285,7 @@ function openProductModal(id) {
     set("mpAvail", "in");
     if (DATA.categories[0]) set("mpCategory", DATA.categories[0].slug);
   }
+  syncProductPriceInputs("mpPrice",true);syncProductPriceInputs("mpOld",true);
   renderProductImages(); renderVariants(); refreshGroupMembers();
   $("modalProduct").classList.add("open");
 }
@@ -363,7 +382,7 @@ function renderVariants() {
           <option value="limited" ${v.availability === "limited" ? "selected" : ""}>كمية محدودة</option><option value="out" ${v.availability === "out" ? "selected" : ""}>غير متوفر</option></select></div>
       </div>
       <div class="row cols-3 mt">
-        ${CURS.map((c) => `<div><label class="label">السعر (${CUR_SYM[c]})</label><input class="field" inputmode="decimal" value="${v.prices?.[c] || ""}" data-var-field="${i}|price${c}" placeholder="اختياري"></div>`).join("")}
+        ${CURS.map((c) => `<div><label class="label">السعر (${CUR_SYM[c]})</label><input class="field" inputmode="decimal" value="${v.prices?.[c]?formatAmount(v.prices[c],c):""}" ${c!=="USD"&&normalizeRates(DATA.settings.rates)["USD_"+c]?"readonly":""} data-var-field="${i}|price${c}" placeholder="اختياري"></div>`).join("")}
       </div>
       <div class="row mt"><div><label class="label">رابط صورة النوع (اختياري)</label><input class="field" dir="ltr" maxlength="2048" value="${esc(v.image || "")}" data-var-field="${i}|image" placeholder="https://..."></div></div>
       <div class="item-actions mt"><button type="button" class="btn btn-danger btn-sm" data-remove-variant="${i}">🗑 حذف النوع</button></div>
@@ -374,7 +393,21 @@ function onVariantField(i, field, value) {
   if (field === "name") v.name = value;
   else if (field === "availability") v.availability = value || undefined;
   else if (field === "image") v.image = /^(https?:\/\/|\/)/i.test(value.trim()) ? value.trim() : "";
-  else if (field.startsWith("price")) { const c = field.slice(5); v.prices = v.prices || { USD: 0, TRY: 0, SYP: 0 }; v.prices[c] = parsePrice(value, c); }
+  else if(field.startsWith("price")){
+    const c=field.slice(5);v.prices=v.prices||{USD:0,TRY:0,SYP:0};
+    v.prices[c]=parsePrice(value,c);
+    if(c==="USD"){
+      const rates=normalizeRates(DATA.settings.rates);
+      for(const local of ["TRY","SYP"]){
+        if(!rates["USD_"+local])continue;
+        try{
+          v.prices[local]=convertUSD(v.prices.USD,rates["USD_"+local],local);
+          const input=$("mpVariantsList").querySelector('[data-var-field="'+i+'|price'+local+'"]');
+          if(input)input.value=v.prices[local]?formatAmount(v.prices[local],local):"";
+        }catch{toast("سعر النوع خارج النطاق المدعوم","error");}
+      }
+    }
+  }
 }
 
 /* ---------- رفع الصور ---------- */
@@ -821,6 +854,11 @@ document.addEventListener("click", (e) => {
 });
 $("mpVariantsList").addEventListener("input", (e) => { const f = e.target.dataset.varField; if (f) { const [i, k] = f.split("|"); onVariantField(+i, k, e.target.value); } });
 $("mpVariantsList").addEventListener("change", (e) => { const f = e.target.dataset.varField; if (f) { const [i, k] = f.split("|"); onVariantField(+i, k, e.target.value); } });
+for(const prefix of ["mpPrice","mpOld"]){
+  $(prefix+"USD").addEventListener("input",()=>syncProductPriceInputs(prefix));
+  $(prefix+"USD").addEventListener("blur",()=>syncProductPriceInputs(prefix,true));
+  for(const c of ["TRY","SYP"])$(prefix+c).addEventListener("blur",()=>syncProductPriceInputs(prefix,true));
+}
 $("mpGroup").addEventListener("input", refreshGroupMembers);
 $("loginForm").addEventListener("submit", (e) => { e.preventDefault(); doLogin(); });
 $("logoutBtn").addEventListener("click", doLogout);
