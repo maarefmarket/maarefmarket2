@@ -120,7 +120,7 @@ function normalize(d) {
 async function loadData() {
   toast("جاري التحميل...", "info");
   try {
-    const res = await fetch("/api/data", { cache: "no-store" });
+    const res = await fetch("/api/data", { cache: "no-store", headers: authHeaders() });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const j = await res.json();
     VERSION = Number(j._version) || 0; delete j._version;
@@ -145,7 +145,7 @@ async function saveAll(force = false) {
     }
     if (!res.ok) throw new Error(j.error || "HTTP " + res.status);
     VERSION = Number(j.version) || VERSION;
-    SAVED_DATA = deepClone(DATA); updateDirty();
+    SAVED_DATA = deepClone(DATA); updateDirty(); renderMaintenanceStatus();
     toast("✓ تم الحفظ ونُشر للجميع", "success");
   } catch (e) { toast("فشل الحفظ: " + (e.message || e), "error"); }
   finally { $("saveBtnTop").disabled = false; }
@@ -585,12 +585,20 @@ function saveBanner() {
 }
 
 /* ---------- الإعدادات ---------- */
+function renderMaintenanceStatus() {
+  const active=SAVED_DATA?.settings?.maintenanceMode===true;
+  const pending=(DATA?.settings?.maintenanceMode===true)!==active;
+  $("maintenanceStatus").textContent=(active?"الحالة المنشورة: المتجر قيد الصيانة":"الحالة المنشورة: المتجر مفتوح")+ (pending?" — تغيير غير محفوظ":"");
+}
 function renderSettings() {
   const s = DATA.settings;
   $("setStoreName").value = s.storeName || ""; $("setDescription").value = s.description || "";
   $("setBannerInterval").value = s.bannerIntervalSec; $("setDelivery").value = s.deliveryNote || "";
   $("setInstagram").value = s.instagram || ""; $("setEmail").value = s.email || "";
   $("setBannersEnabled").checked = s.bannersEnabled !== false;
+  $("setMaintenanceMode").checked = s.maintenanceMode === true;
+  $("setMaintenanceMessage").value = s.maintenanceMessage || "";
+  renderMaintenanceStatus();
   $("setMsgTemplate").value = s.msgTemplate || DEFAULT_MSG_TEMPLATE;
   renderWhatsappList();
 }
@@ -618,6 +626,8 @@ function bindSettings() {
   }));
   $("setBannerInterval").addEventListener("input", (e) => { DATA.settings.bannerIntervalSec = Math.max(2, Math.min(120, parseInt(e.target.value, 10) || 7)); updateDirty(); });
   $("setBannersEnabled").addEventListener("change", (e) => { DATA.settings.bannersEnabled = e.target.checked; updateDirty(); });
+  $("setMaintenanceMode").addEventListener("change", e => { if(!DATA)return; DATA.settings.maintenanceMode=e.target.checked; updateDirty(); renderMaintenanceStatus(); });
+  $("setMaintenanceMessage").addEventListener("input", e => { if(!DATA)return; DATA.settings.maintenanceMessage=e.target.value; updateDirty(); });
   $("setMsgTemplate").addEventListener("input", (e) => { DATA.settings.msgTemplate = e.target.value; updateDirty(); });
   $("whatsappList").addEventListener("input", (e) => {
     const i = e.target.dataset.waInput; if (i == null) return;
