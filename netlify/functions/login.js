@@ -52,4 +52,4 @@ export default async (req, context) => {
   return json({ ok: true, token, exp }, 200, cors);
 };
 
-export const config = { path: "/api/login" };
+export const config = { path: "/api/login", rateLimit: { windowLimit: 15, windowSize: 60, aggregateBy: ["ip", "domain"] } };
