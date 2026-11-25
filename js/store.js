@@ -54,6 +54,7 @@ async function loadData() {
 
 function renderMaintenance(message){
   maintenance=true;storeReady=false;stopBanner();
+  if(feedbackPending){feedbackPending=null;if($("feedbackDialog").open)$("feedbackDialog").close();}
   if(imageViewer.open){viewerResume=false;imageViewer.close();}
   document.documentElement.classList.add("maintenance-mode");
   $("app").innerHTML='<section class="maintenance-card" role="status"><img src="assets/logo.svg" alt=""><span class="maintenance-icon" aria-hidden="true">🛠️</span><h1>الموقع قيد الصيانة</h1><p id="maintenanceMessage"></p><button type="button" class="btn btn-primary" id="retryStoreBtn">إعادة المحاولة</button></section>';
@@ -295,7 +296,7 @@ function submitOrder(src,notes,report){
   const items=orderItems(src);let msg;
   try{msg=buildOrderMessage(notes,src);}catch{report("إجمالي الطلب أكبر من الحد المدعوم؛ قسّم الطلب.");return false;}
   if(!msg||!items.length){report("السلة فارغة");return false;}
-  return openWhatsapp(msg,items,notes);
+  return showOrderFeedback(msg,items,notes);
 }
 function buyNowWA(id) {
   const report=message=>toast(message,"err");
@@ -313,6 +314,40 @@ function checkout() {
   const notes=($("cNotes")?.value||"").trim(),err=$("cErr");
   return submitOrder({...cart},notes,message=>{if(err)err.textContent=message;else toast(message,"err");});
 }
+
+/* ---------- رأي الزبون الاختياري ---------- */
+let feedbackPending=null,feedbackBusy=false;
+function showOrderFeedback(msg,items,notes){
+  if(feedbackPending||feedbackBusy||maintenance||!storeReady)return false;
+  const dialog=$("feedbackDialog");
+  feedbackPending={msg,items,notes,id:Date.now()+"-"+crypto.randomUUID(),saved:false};
+  $("feedbackText").value="";$("feedbackText").disabled=false;$("feedbackError").textContent="";
+  $("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;
+  dialog.showModal();return true;
+}
+async function finishFeedback(send){
+  const pending=feedbackPending;if(!pending||feedbackBusy)return;
+  const field=$("feedbackText"),error=$("feedbackError"),value=field.value.trim();
+  if(send&&!value&&!pending.saved){error.textContent="اكتب اقتراحك أو اختر تخطي.";field.focus();return;}
+  feedbackBusy=true;$("feedbackSend").disabled=true;$("feedbackSkip").disabled=true;field.disabled=true;
+  try{
+    if(send&&!pending.saved){
+      error.textContent="جاري حفظ رأيك…";
+      const res=await fetch("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:pending.id,text:value,items:pending.items}),signal:AbortSignal.timeout(7000)});
+      const j=await res.json().catch(()=>({}));
+      if(!res.ok||!j.ok)throw Error(j.error||"تعذر حفظ الرأي. يمكنك إعادة المحاولة أو التخطي.");
+      pending.saved=true;error.textContent=j.preview?"معاينة: لم يُحفظ رأي حقيقي.":"شكراً لك، تم حفظ رأيك.";
+    }
+    if(feedbackPending!==pending)return;
+    if(await openWhatsapp(pending.msg,pending.items,pending.notes)){
+      feedbackPending=null;$("feedbackDialog").close();
+    }else if(feedbackPending===pending)error.textContent=pending.saved?"تم حفظ رأيك، تعذر فتح الطلب. حاول المتابعة مجدداً.":"تعذر فتح الطلب حالياً. حاول مرة أخرى.";
+  }catch(e){if(feedbackPending===pending)error.textContent=e.message||"تعذر حفظ الرأي؛ أعد المحاولة أو تخطّ.";}
+  finally{feedbackBusy=false;$("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;field.disabled=!!feedbackPending?.saved;}
+}
+$("feedbackForm").addEventListener("submit",e=>{e.preventDefault();finishFeedback(true);});
+$("feedbackSkip").addEventListener("click",()=>finishFeedback(false));
+$("feedbackDialog").addEventListener("cancel",e=>{e.preventDefault();if(!feedbackBusy)finishFeedback(false);});
 
 /* ---------- التنقّل ---------- */
 // الانتقال لأعلى الصفحة فوراً (بدون أنيميشن سحب) عند كل تنقّل داخل المتجر
