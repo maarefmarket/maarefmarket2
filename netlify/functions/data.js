@@ -77,11 +77,17 @@ export default async (req, context) => {
         data = sanitizeStore(data);
       }
 
+      const mode=data.settings.maintenanceMode===true;
+      const status={maintenanceMode:mode,maintenanceMessage:data.settings.maintenanceMessage||""};
+      if(new URL(req.url).searchParams.get("status")==="1")return json(status,200,cors);
+      const adminRequested=!!req.headers.get("authorization");
+      if(adminRequested){const denied=requireAuth(req);if(denied)return denied;}
+      if(mode&&!adminRequested)return json({settings:{storeName:data.settings.storeName,theme:data.settings.theme,...status},banners:[],categories:[],products:[]},503,{...cors,"Retry-After":"60"});
       const etag = `"${version}"`;
       if (req.headers.get("if-none-match") === etag) {
         return new Response(null, { status: 304, headers: { ETag: etag, "Cache-Control": "no-cache", ...cors } });
       }
-      return json(withVersion(data, version), 200, { ...cors, ETag: etag, "Cache-Control": "no-cache" });
+      return json(withVersion(data, version), 200, { ...cors, ETag: etag, "Cache-Control": "no-store", Vary: "Authorization, Origin" });
     } catch (e) {
       console.error("GET error", e);
       return json({ error: "تعذّر قراءة البيانات" }, 500, cors);
