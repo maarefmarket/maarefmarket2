@@ -1,81 +1,74 @@
-/**
- * Netlify Function: /api/notify
- * يستقبل نص الطلب من واجهة المتجر ويرسل نسخة إلى بوت Telegram في الخلفية.
- *
- * متغيرات البيئة على Netlify:
- *   TELEGRAM_BOT_TOKEN   توكن البوت من BotFather
- *   TELEGRAM_CHAT_IDS    معرّف محادثة أو أكثر مفصولة بفاصلة
- *   WA_LOG=1             (اختياري) حفظ نسخة من كل طلب في Netlify Blobs
- *
- * الحماية: Same-Origin إلزامي، حدّ 10 طلبات/10 دقائق لكل IP، حدّ لطول النص،
- * إرسال كنص خام (بدون Markdown) لتجنّب فشل التنسيق أو الحقن.
- * لا تُرجع أي تفاصيل عن الإعدادات للزبون.
- */
-
 import { getStore } from "@netlify/blobs";
 import { json, noContent, corsHeaders, isSameOrigin, clientIp, rateLimit } from "../lib/auth.js";
+import { buildOrder } from "../lib/order.js";
 
-const MAX_TEXT = 4000; // حدّ تلغرام 4096
-
-async function sendToTelegram(token, chatId, text) {
+async function telegram(token, method, payload) {
   try {
-    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+    const res = await fetch("https://api.telegram.org/bot" + token + "/" + method, {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload), signal: AbortSignal.timeout(5000)
     });
-    const j = await res.json().catch(() => ({}));
-    return !!(res.ok && j.ok);
-  } catch (e) {
-    console.error("telegram error", e);
-    return false;
-  }
+    return res.ok && (await res.json()).ok === true;
+  } catch { console.error("Telegram delivery failed"); return false; }
 }
-
-async function logOrder(entry) {
-  if (process.env.WA_LOG !== "1") return;
+function photoURL(value, origin) {
   try {
-    const store = getStore({ name: "campuskart-orders" });
-    const key = `order-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.json`;
-    await store.setJSON(key, { timestamp: new Date().toISOString(), ...entry });
-  } catch (e) { console.error("logOrder failed", e); }
+    if (!/^\/api\/image\/[a-z0-9]{6,40}\.(jpg|png|webp|gif)$/.test(value) && !/^https:\/\//i.test(value)) return "";
+    const u = new URL(value, origin);
+    if (u.protocol !== "https:" || u.username || u.password) return "";
+    return u.href;
+  } catch { return ""; }
 }
-
-export default async (req, context) => {
-  const cors = corsHeaders(req, "POST, OPTIONS");
-  if (req.method === "OPTIONS") return noContent(cors);
-  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
-  if (!isSameOrigin(req, true)) return json({ error: "غير مسموح" }, 403, cors);
-
-  const ip = clientIp(req, context);
-  const rl = await rateLimit("notify", ip, { limit: 10, windowMs: 10 * 60 * 1000 });
-  if (!rl.allowed) return json({ ok: false }, 429, { ...cors, "Retry-After": String(rl.retryAfterSec) });
-
-  let body;
-  try { body = await req.json(); } catch { return json({ error: "JSON غير صالح" }, 400, cors); }
-
-  const text = String(body?.text || "").replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").slice(0, MAX_TEXT).trim();
-  if (!text) return json({ error: "لا يوجد نص" }, 400, cors);
-
-  const store = String(body?.meta?.store || "").slice(0, 80);
-  const numbers = Array.isArray(body?.meta?.numbers) ? body.meta.numbers.map((n) => String(n).replace(/\D/g, "").slice(0, 20)).slice(0, 10) : [];
-
-  await logOrder({ text, store, numbers, ip });
-
-  const token = process.env.TELEGRAM_BOT_TOKEN || "";
-  const chatIds = (process.env.TELEGRAM_CHAT_IDS || "").split(",").map((s) => s.trim()).filter((s) => /^-?\d+$/.test(s));
-  if (!token || !chatIds.length) {
-    // غير مضبوط → نُرجع نجاحاً صامتاً للزبون؛ الطلب الأساسي يمرّ عبر واتساب على أي حال
-    return json({ ok: true, sent: 0 }, 200, cors);
+async function deliver(token, chatId, order, origin) {
+  // Split on code points so no malformed Unicode is sent.
+  const chars = Array.from(order.text);
+  for (let i = 0; i < chars.length; i += 1800) {
+    if (!await telegram(token,"sendMessage",{chat_id:chatId,text:chars.slice(i,i+1800).join(""),disable_web_page_preview:true})) return {sent:false,photos:0};
   }
-
-  const header = `🛒 طلب جديد من ${store || "المتجر"}\n━━━━━━━━━━━━━━━━━━\n`;
-  const footer = `\n━━━━━━━━━━━━━━━━━━\n📅 ${new Date().toLocaleString("ar-SY", { hour12: false, timeZone: "Asia/Damascus" })}`;
-  const message = header + text + footer;
-
-  const results = await Promise.all(chatIds.map((id) => sendToTelegram(token, id, message)));
-  const sent = results.filter(Boolean).length;
-  return json({ ok: sent > 0, sent }, 200, cors);
+  const images = order.items.map(i => ({type:"photo",media:photoURL(i.image,origin),caption:Array.from(i.name+" × "+i.qty).slice(0,450).join("")})).filter(i => i.media);
+  let photos = 0;
+  // Bound notification work; no more than 10 photos per request.
+  const selected = images.slice(0,10);
+  if (selected.length === 1) {
+    if (await telegram(token,"sendPhoto",{chat_id:chatId,photo:selected[0].media,caption:selected[0].caption})) photos=1;
+  } else if (selected.length > 1) {
+    if (await telegram(token,"sendMediaGroup",{chat_id:chatId,media:selected})) photos=selected.length;
+  }
+  return {sent:true,photos};
+}
+export default async (req, context) => {
+  const cors = corsHeaders(req,"POST, OPTIONS");
+  if(req.method==="OPTIONS") return noContent(cors);
+  if(req.method!=="POST") return json({error:"Method not allowed"},405,cors);
+  if(!isSameOrigin(req,true)) return json({error:"غير مسموح"},403,cors);
+  const origin = new URL(req.url).origin;
+  const production = new URL(process.env.URL || "https://maarefmarket.netlify.app").origin;
+  if(origin!==production) return json({ok:true,preview:true},200,cors);
+  const rl = await rateLimit("notify",clientIp(req,context),{limit:10,windowMs:600000});
+  if(!rl.allowed) return json({ok:false},429,{...cors,"Retry-After":String(rl.retryAfterSec)});
+  let body;
+  try {
+    if(Number(req.headers.get("content-length")||0)>16000) return json({ok:false},413,cors);
+    const raw=await req.text();
+    if(Buffer.byteLength(raw,"utf8")>16000) return json({ok:false},413,cors);
+    body=JSON.parse(raw);
+  } catch { return json({error:"JSON غير صالح"},400,cors); }
+  let catalog;
+  try { catalog=await getStore({name:"campuskart-data",consistency:"strong"}).get("store.json",{type:"json"}); }
+  catch { return json({ok:false},503,cors); }
+  if(!catalog) return json({ok:false},503,cors);
+  let order;
+  try { order=buildOrder(catalog,body); } catch { return json({error:"بيانات الطلب غير صالحة"},400,cors); }
+  if(process.env.WA_LOG==="1") {
+    try {
+      const key="order-"+Date.now()+"-"+crypto.randomUUID()+".json";
+      await getStore({name:"campuskart-orders"}).setJSON(key,{timestamp:new Date().toISOString(),store:order.store,text:order.text,items:order.items});
+    } catch { console.error("Order logging failed"); }
+  }
+  const token=process.env.TELEGRAM_BOT_TOKEN || "";
+  const chats=[...new Set((process.env.TELEGRAM_CHAT_IDS||"").split(",").map(s=>s.trim()).filter(s=>/^-?\d+$/.test(s)))].slice(0,10);
+  if(!token||!chats.length) return json({ok:true,sent:0,photos:0},200,cors);
+  const results=await Promise.all(chats.map(id=>deliver(token,id,order,production)));
+  return json({ok:results.some(r=>r.sent),sent:results.filter(r=>r.sent).length,photos:results.reduce((n,r)=>n+r.photos,0)},200,cors);
 };
-
-export const config = { path: "/api/notify" };
+export const config={path:"/api/notify"};
