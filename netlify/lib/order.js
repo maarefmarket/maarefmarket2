@@ -1,3 +1,4 @@
+import { lineAmount, sumTicks, fromTicks, formatMoney } from "../../js/money.js";
 import { sanitizeStore, str } from "./validate.js";
 
 const CURRENCIES = ["USD", "TRY", "SYP"];
@@ -23,15 +24,13 @@ export function buildOrder(rawStore, body) {
     if (variant >= 0 && !v || v?.availability === "out") throw new Error("Unavailable variant");
     const prices = v?.prices && CURRENCIES.some(c => v.prices[c] > 0) ? v.prices : p.prices;
     const show = v?.showCurrencies || p.showCurrencies || {};
-    const cur = CURRENCIES.find(c => prices[c] > 0 && show[c] !== false) || CURRENCIES.find(c => prices[c] > 0);
-    if (!cur) throw new Error("Price unavailable");
-    const scale = cur === "SYP" ? 1 : 100;
-    const unit = Math.round(prices[cur] * scale), total = unit * qty;
-    if (!Number.isSafeInteger(total) || !Number.isSafeInteger((totals[cur] || 0) + total)) throw new Error("Invalid total");
-    totals[cur] = (totals[cur] || 0) + total;
-    items.push({id, variant, qty, name: v ? p.name + " — " + (v.name || "نوع " + (variant + 1)) : p.name, image: v?.image || p.images[0] || "", cur, unit: unit/scale, total: total/scale});
+    const amount=lineAmount(prices,show,qty);
+    if(!amount)throw new Error("Invalid price or total");
+    const {cur,unit,total,totalTicks}=amount;
+    sumTicks(totals,cur,totalTicks);
+    items.push({id,variant,qty,name:v?p.name+" — "+(v.name||"نوع "+(variant+1)):p.name,image:v?.image||p.images[0]||"",cur,unit,total});
   }
-  const fmt = (n, c) => new Intl.NumberFormat("en-US", {maximumFractionDigits: c === "SYP" ? 0 : 2}).format(n) + " " + ({USD:"$",TRY:"₺",SYP:"ل.س"}[c]);
+  const fmt = formatMoney;
   const notes = str(body.notes, 500);
   const lines = items.map(i => "• " + i.name + " × " + i.qty + " — " + fmt(i.unit,i.cur) + " = " + fmt(i.total,i.cur));
   const defaultTemplate = "السلام عليكم\nأريد شراء هذه الأشياء:\n\n{items}\n\nالسعر النهائي الإجمالي:\n{totals}\n\n{notes}\n\nشكراً لكم 🌿";
@@ -39,7 +38,7 @@ export function buildOrder(rawStore, body) {
   if (!template.includes("{items}")) template += "\n\n{items}";
   if (!template.includes("{totals}")) template += "\n\nالسعر النهائي الإجمالي:\n{totals}";
   if (notes && !template.includes("{notes}")) template += "\n\n{notes}";
-  const fields = {items:lines.join("\n"),totals:CURRENCIES.filter(c=>totals[c]).map(c=>fmt(totals[c]/(c==="SYP"?1:100),c)).join("\n"),notes:notes?"ملاحظة العميل: "+notes:"",store:data.settings.storeName};
+  const fields = {items:lines.join("\n"),totals:CURRENCIES.filter(c=>totals[c]).map(c=>fmt(fromTicks(totals[c],c),c)).join("\n"),notes:notes?"ملاحظة العميل: "+notes:"",store:data.settings.storeName};
   const text="طلب واتساب — بانتظار تأكيد العميل\n"+template.replace(/\{(items|totals|notes|store)\}/g,(_,key)=>fields[key]).replace(/\n{3,}/g,"\n\n").trim();
   return {kind:"order",store:data.settings.storeName,text,items,notes};
 }
