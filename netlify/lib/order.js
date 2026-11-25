@@ -1,4 +1,5 @@
-import { lineAmount, sumTicks, fromTicks, formatMoney } from "../../js/money.js";
+import { formatOrderItem, formatOrderTotal, fillOrderTemplate } from "../../js/order-format.js";
+import { lineAmount, sumTicks, fromTicks } from "../../js/money.js";
 import { sanitizeStore, str } from "./validate.js";
 
 const CURRENCIES = ["USD", "TRY", "SYP"];
@@ -30,15 +31,14 @@ export function buildOrder(rawStore, body) {
     sumTicks(totals,cur,totalTicks);
     items.push({id,variant,qty,name:v?p.name+" — "+(v.name||"نوع "+(variant+1)):p.name,image:v?.image||p.images[0]||"",cur,unit,total});
   }
-  const fmt = formatMoney;
-  const notes = str(body.notes, 500);
-  const lines = items.map(i => "• " + i.name + " × " + i.qty + " — " + fmt(i.unit,i.cur) + " = " + fmt(i.total,i.cur));
-  const defaultTemplate = "السلام عليكم\nأريد شراء هذه الأشياء:\n\n{items}\n\nالسعر النهائي الإجمالي:\n{totals}\n\n{notes}\n\nشكراً لكم 🌿";
-  let template = data.settings.msgTemplate || defaultTemplate;
-  if (!template.includes("{items}")) template += "\n\n{items}";
-  if (!template.includes("{totals}")) template += "\n\nالسعر النهائي الإجمالي:\n{totals}";
-  if (notes && !template.includes("{notes}")) template += "\n\n{notes}";
-  const fields = {items:lines.join("\n"),totals:CURRENCIES.filter(c=>totals[c]).map(c=>fmt(fromTicks(totals[c],c),c)).join("\n"),notes:notes?"ملاحظة العميل: "+notes:"",store:data.settings.storeName};
-  const text="طلب واتساب — بانتظار تأكيد العميل\n"+template.replace(/\{(items|totals|notes|store)\}/g,(_,key)=>fields[key]).replace(/\n{3,}/g,"\n\n").trim();
+  const notes=str(body.notes,500);
+  const defaultTemplate="السلام عليكم\nأريد شراء هذه الأشياء:\n\n{items}\n\nالسعر النهائي الإجمالي:\n{totals}\n\n{notes}\n\nشكراً لكم 🌿";
+  const fields={
+    items:items.map(i=>formatOrderItem(i)).join("\n\n"),
+    totals:CURRENCIES.filter(c=>totals[c]).map(c=>formatOrderTotal(c,fromTicks(totals[c],c),items.filter(i=>i.cur===c).length)).join("\n"),
+    notes:notes?"ملاحظة العميل: "+notes:"",
+    store:data.settings.storeName
+  };
+  const text="طلب واتساب — بانتظار تأكيد العميل\n"+fillOrderTemplate(data.settings.msgTemplate||defaultTemplate,fields);
   return {kind:"order",store:data.settings.storeName,text,items,notes};
 }
