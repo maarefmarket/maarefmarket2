@@ -80,7 +80,7 @@ async function storefront(){
   };
   const ctx={...money,...orderFormat,document,window:{addEventListener(){}},location,history:{},fetch,URL,AbortSignal,AbortController,crypto:{randomUUID},console,setInterval:()=>1,clearInterval(){},setTimeout(fn,ms){const id=++timerId;timers.set(id,{fn,ms});return id;},clearTimeout(id){timers.delete(id);}};
   const script=source.replace(/^import .*;\n/gm,"").split("(async function init()")[0]+
-    "\n({setup(d){SETTINGS=d.settings;PRODUCTS=d.products;cart={'1':2,'2':3};storeReady=true;},buyNowWA,finishFeedback,cancelFeedback,requestJSON,checkout,cartTotals,renderMaintenance,getCart:()=>cart,updateShopDock,updateCartCount,cardStep,cardHTML,openCategories});";
+    "\n({setup(d){SETTINGS=d.settings;PRODUCTS=d.products;cart={'1':2,'2':3};storeReady=true;},buyNowWA,showGeneralFeedback,finishFeedback,cancelFeedback,requestJSON,checkout,cartTotals,renderMaintenance,getCart:()=>cart,updateShopDock,updateCartCount,cardStep,cardHTML,openCategories});";
   const api=runInNewContext(script,ctx);api.setup(sanitizeStore(catalog));
   return {api,node,calls,location,setFail(v){fail=v;},setClosed(v){closed=v;},intercept(fn){intercept=fn;},expire(ms){for(const [id,t] of timers){if(t.ms===ms){timers.delete(id);t.fn();}}}};
 }
@@ -321,4 +321,66 @@ test("full catalog JSON timeout is bounded",async()=>{
   await drain();t.expire(8000);
   assert.equal(await request,true);
   assert.equal(t.calls[0].opts.signal.aborted,true);
+});
+
+test("general feedback works with an empty cart and never starts an order",async()=>{
+  const t=await storefront();
+  for(const key of Object.keys(t.api.getCart()))delete t.api.getCart()[key];
+  assert.equal(t.api.showGeneralFeedback(),true);
+  assert.equal(t.node("feedbackSend").textContent,"إرسال الرأي");
+  assert.equal(t.node("feedbackSkip").textContent,"إلغاء");
+  await t.api.finishFeedback(true);assert.equal(t.calls.length,0);
+  t.node("feedbackText").value="اقتراح عام";
+  await t.api.finishFeedback(true);
+  assert.equal(t.node("feedbackDialog").open,false);
+  assert.equal(t.calls.length,1);
+  assert.equal(t.calls[0].url,"/api/feedback");
+  const body=JSON.parse(t.calls[0].opts.body);
+  assert.equal(body.kind,"general");assert.deepEqual(body.items,[]);
+  assert.equal(t.location.assigned,undefined);
+});
+test("general feedback preserves cart, can be cancelled, and does not mix drafts with checkout",async()=>{
+  const t=await storefront();t.api.showGeneralFeedback();
+  t.node("feedbackText").value="general draft";
+  await t.api.finishFeedback(false);
+  assert.equal(t.calls.length,0);
+  assert.equal(t.node("feedbackDialog").open,false);
+  t.api.buyNowWA(1);
+  assert.equal(t.node("feedbackText").value,"");
+  assert.equal(t.node("feedbackSkip").textContent,"تخطي والطلب عبر واتساب");
+  t.node("feedbackText").value="order draft";t.api.cancelFeedback();
+  t.api.showGeneralFeedback();assert.equal(t.node("feedbackText").value,"general draft");
+  t.setFail(true);await t.api.finishFeedback(true);
+  assert.equal(t.node("feedbackDialog").open,true);
+  assert.equal(t.node("feedbackSend").disabled,false);
+  t.api.cancelFeedback();
+  t.api.buyNowWA(1);assert.equal(t.node("feedbackText").value,"order draft");
+  assert.equal(t.api.getCart()["1"],2);
+  await t.api.finishFeedback(false);
+  assert.equal(t.calls.filter(x=>x.url==="/api/notify").length,1);
+});
+test("server records general feedback without identity or product data and rejects fake orders",()=>{
+  const now=new Date("2026-11-25T18:10:11.000Z");
+  const body={id:now.getTime()+"-"+randomUUID(),kind:"general",text:"اقتراح عام",items:[],name:"private",phone:"123",ip:"1.2.3.4"};
+  const before=JSON.stringify(catalog);
+  const {record}=makeRecord(catalog,body,now);
+  assert.deepEqual(record,{timestamp:now.toISOString(),text:"اقتراح عام",items:[],status:"general-feedback"});
+  assert.equal(JSON.stringify(catalog),before);
+  assert.throws(()=>makeRecord(catalog,{...body,items:[{id:1,qty:2}]},now));
+  assert.throws(()=>makeRecord(catalog,{...body,kind:"order"},now));
+  assert.throws(()=>makeRecord(catalog,{...body,text:" "},now));
+  assert.throws(()=>makeRecord(catalog,{...body,kind:"unknown"},now));
+  assert.throws(()=>makeRecord({...catalog,settings:{...catalog.settings,maintenanceMode:true}},body,now));
+});
+test("cancel standalone feedback during stalled save prevents late response from affecting new checkout",async()=>{
+  const t=await storefront();let resolveOld;
+  t.intercept(url=>url==="/api/feedback"?new Promise(resolve=>{resolveOld=resolve;}):null);
+  t.api.showGeneralFeedback();t.node("feedbackText").value="draft";
+  const old=t.api.finishFeedback(true);await drain();
+  t.api.cancelFeedback();await old;
+  t.intercept(null);t.api.buyNowWA(1);
+  resolveOld({ok:true,json:async()=>({ok:true})});await drain();
+  assert.equal(t.node("feedbackDialog").open,true);
+  assert.equal(t.location.assigned,undefined);
+  assert.equal(t.calls.filter(x=>x.url==="/api/notify").length,0);
 });
