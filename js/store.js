@@ -441,7 +441,7 @@ function bindSwipe(el,onSwipe,{onStart=()=>{},onFinish=()=>{}}={}){
     const horizontal=!cancelled&&Math.abs(dx)>=45&&Math.abs(dx)>Math.abs(dy)*1.25;
     if(horizontal||g.dragging)suppressUntil=Date.now()+500;
     if(horizontal){if(e.cancelable)e.preventDefault();onSwipe(dx>0?1:-1);}
-    if(el.hasPointerCapture?.(g.id))el.releasePointerCapture(g.id);
+    try{if(el.hasPointerCapture?.(g.id))el.releasePointerCapture(g.id);}catch{}
     onFinish();
   };
   el.addEventListener("pointerdown",e=>{
@@ -460,7 +460,7 @@ function bindSwipe(el,onSwipe,{onStart=()=>{},onFinish=()=>{}}={}){
   });
   el.addEventListener("pointerup",e=>finish(e));
   el.addEventListener("pointercancel",e=>finish(e,true));
-  el.addEventListener("lostpointercapture",e=>finish(e,true));
+  el.addEventListener("lostpointercapture",e=>{if(e.target===el)finish(e,true);});
   el.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse"&&!gesture?.dragging)finish(e,true);});
   el.addEventListener("click",e=>{
     if(e.detail!==0&&Date.now()<suppressUntil){e.preventDefault();e.stopImmediatePropagation();suppressUntil=0;}
