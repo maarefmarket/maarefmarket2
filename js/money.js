@@ -32,7 +32,8 @@ export function roundPrice(value,c){return fromTicks(priceTicks(value,c),c);}
 export function convertUSD(value,rate,c){
   const usd=roundPrice(value,"USD"),r=Math.min(1e9,decimal(rate));
   if(!usd||!r)return 0;
-  if(usd*r>MAX)throw new RangeError("Converted price exceeds supported range");
+  const [a,b]=fraction(usd),[x,y]=fraction(r);
+  if(a*x>BigInt(MAX)*b*y)throw new RangeError("Converted price exceeds supported range");
   return fromTicks(ticksFrom(usd,c,r),c);
 }
 export function formatAmount(value,c){return formatters[c].format(value||0);}
@@ -80,11 +81,11 @@ export function lineAmount(prices,show,qty){
   const cur=billingCurrency(prices,show);
   if(!cur||!Number.isSafeInteger(qty)||qty<1||qty>999)return null;
   const unitTicks=priceTicks(prices[cur],cur),totalTicks=unitTicks*qty;
-  if(!Number.isSafeInteger(totalTicks)||!Number.isSafeInteger(Math.round(fromTicks(totalTicks,cur)*(cur==="USD"?100:cur==="TRY"?2:1))))return null;
+  if(!unitTicks||!Number.isSafeInteger(totalTicks)||(cur==="SYP"&&!Number.isSafeInteger(totalTicks*10)))return null;
   return {cur,unit:fromTicks(unitTicks,cur),total:fromTicks(totalTicks,cur),unitTicks,totalTicks};
 }
 export function sumTicks(totals,cur,ticks){
   const next=(totals[cur]||0)+ticks;
-  if(!Number.isSafeInteger(next)||!Number.isSafeInteger(Math.round(fromTicks(next,cur)*(cur==="USD"?100:cur==="TRY"?2:1))))throw new RangeError("Order total too large");
+  if(!Number.isSafeInteger(next)||(cur==="SYP"&&!Number.isSafeInteger(next*10)))throw new RangeError("Order total too large");
   totals[cur]=next;return next;
 }
