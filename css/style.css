@@ -269,3 +269,8 @@ html.maintenance-mode #app{min-height:100vh;min-height:100dvh;display:grid;place
 .maintenance-icon{display:block;font-size:32px;margin-bottom:8px}
 .maintenance-card h1{font-size:clamp(22px,5vw,30px);color:var(--brand)}
 .maintenance-card p{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--muted);margin:12px 0 22px}
+
+/* Swipeable advertisements and enlarged photos; keep vertical page scrolling. */
+#bannerBox,.viewer-stage img{touch-action:pan-y pinch-zoom;user-select:none;-webkit-user-select:none}
+#bannerBox .banner-slide{position:relative;min-height:inherit;overflow:hidden}
+#bannerBox img,.viewer-stage img{-webkit-user-drag:none}

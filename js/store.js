@@ -317,15 +317,27 @@ async function openWhatsapp(text, items, notes, inquiryId) {
   location.assign("https://wa.me/"+nums[0]+"?text="+encodeURIComponent(text));
   return true;
 }
+// Every purchase button submits the same selected basket. The clicked product
+// is a one-piece fallback only when the customer has no existing selections.
+function submitOrder(src,notes,report){
+  if(!whatsappNumbers().length){report("لم يتم ضبط رقم واتساب المتجر");return false;}
+  const keys=Object.keys(src);
+  if(!keys.length){report("السلة فارغة");return false;}
+  if(keys.length>50){report("يرجى تقسيم الطلب إلى 50 صنفاً كحد أقصى");return false;}
+  if(keys.some(k=>{const it=resolveItem(k);return !it||it.availability==="out"||!billingCur(it)||!Number.isInteger(src[k])||src[k]<1||src[k]>999;})){
+    report("يوجد منتج غير متوفر أو سعره أو كميته غير صالحة؛ راجع السلة.");return false;
+  }
+  const items=orderItems(src),msg=buildOrderMessage(notes,src);
+  if(!msg||!items.length){report("السلة فارغة");return false;}
+  return openWhatsapp(msg,items,notes);
+}
 function buyNowWA(id) {
-  const p=byId(id); if(!p)return;
-  let vi=-1;
-  if(p.variants?.length){vi=p.variants.findIndex(v=>v.availability!=="out");if(vi<0)vi=0;}
-  const key=vKey(id,vi),it=resolveItem(key);
-  if(!it||it.availability==="out"){toast("غير متوفر","err");return;}
-  const src={[key]:1},msg=buildOrderMessage("",src);
-  if(!billingCur(it)){toast("سعر المنتج غير محدد","err");return;}
-  if(msg)return openWhatsapp(msg,orderItems(src),"");
+  const report=message=>toast(message,"err");
+  if(Object.keys(cart).length)return submitOrder({...cart},"",report);
+  const p=byId(id);if(!p)return false;
+  const vi=p.variants?.length?p.variants.findIndex(v=>v.availability!=="out"):-1;
+  if(p.variants?.length&&vi<0){report("غير متوفر");return false;}
+  return submitOrder({[vKey(id,vi)]:1},"",report);
 }
 function inquireWA(id) {
   const p=byId(id);if(!p)return;
@@ -333,12 +345,7 @@ function inquireWA(id) {
 }
 function checkout() {
   const notes=($("cNotes")?.value||"").trim(),err=$("cErr");
-  if(!whatsappNumbers().length){err.textContent="لم يتم ضبط رقم واتساب المتجر";return;}
-  const items=orderItems(cart),msg=buildOrderMessage(notes);
-  if(!msg||!items.length){err.textContent="السلة فارغة";return;}
-  if(items.length>50){err.textContent="يرجى تقسيم الطلب إلى 50 صنفاً كحد أقصى";return;}
-  if(Object.keys(cart).some(k=>{const it=resolveItem(k);return !it||it.availability==="out"||!billingCur(it);})){err.textContent="يوجد منتج غير متوفر أو سعره غير محدد؛ راجع السلة.";return;}
-  return openWhatsapp(msg,items,notes);
+  return submitOrder({...cart},notes,message=>{if(err)err.textContent=message;else toast(message,"err");});
 }
 
 /* ---------- التنقّل ---------- */
@@ -389,21 +396,77 @@ function bannerHTML() {
   const dots = BANNERS.length > 1 ? `<div class="banner-dots">${BANNERS.map((_, i) => `<button type="button" data-banner-set="${i}" class="${i === 0 ? "active" : ""}" aria-label="الإعلان ${i+1}"></button>`).join("")}</div>` : "";
   return `<section class="banner-area" aria-label="إعلانات"><div class="banner" id="bannerBox"></div>${dots}</section>`;
 }
-function renderBanner() {
+function renderBanner(step=0) {
   const box = $("bannerBox"); const b = BANNERS[bannerIdx];
   if (!box || !b) return;
   const src = safeSrc(b.image);
   const link = safeSrc(b.link);
   const inner = `${src ? `<img src="${src}" alt="">` : ""}<div class="ov"></div><div class="txt">${b.eyebrow ? `<div class="ey">${esc(b.eyebrow)}</div>` : ""}${b.title ? `<h2>${esc(b.title)}</h2>` : ""}</div>`;
-  box.innerHTML = inner + (src ? `<button type="button" class="image-hit" data-image-banner="${bannerIdx}" aria-label="تكبير الإعلان"></button>` : link ? `<a href="${link}" target="_blank" rel="noopener" class="image-hit" aria-label="فتح رابط الإعلان"></a>` : "");
-  document.querySelectorAll(".banner-dots button").forEach((d, i) => d.classList.toggle("active", i === bannerIdx));
+  box.innerHTML = `<div class="banner-slide">${inner}</div>` + (src ? `<button type="button" class="image-hit" data-image-banner="${bannerIdx}" aria-label="تكبير الإعلان"></button>` : link ? `<a href="${link}" target="_blank" rel="noopener" class="image-hit" aria-label="فتح رابط الإعلان"></a>` : "");
+  document.querySelectorAll(".banner-dots button").forEach((d, i) => {
+    d.classList.toggle("active", i === bannerIdx);
+    if(i===bannerIdx)d.setAttribute("aria-current","true");else d.removeAttribute("aria-current");
+  });
+  if(step)animateSlide(box.querySelector(".banner-slide"),step);
 }
 function startBanner() {
   stopBanner();
-  if (SETTINGS.bannersEnabled === false || BANNERS.length < 2) return;
-  bannerTimer = setInterval(() => { bannerIdx = (bannerIdx + 1) % BANNERS.length; renderBanner(); }, SETTINGS.bannerIntervalSec * 1000);
+  if (maintenance || !$("bannerBox") || imageViewer.open || SETTINGS.bannersEnabled === false || BANNERS.length < 2) return;
+  bannerTimer = setInterval(() => moveBanner(1), SETTINGS.bannerIntervalSec * 1000);
 }
 
+function moveBanner(step){
+  if(BANNERS.length<2)return;
+  bannerIdx=(bannerIdx+step+BANNERS.length)%BANNERS.length;
+  renderBanner(step);
+}
+
+// A short transition shared by the inline banner and full-screen gallery.
+function animateSlide(el,step){
+  if(!el?.animate||window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches)return;
+  for(const anim of el.getAnimations?.()||[])anim.cancel();
+  const offset=step>0?-18:18;
+  el.animate([{opacity:.65,transform:"translateX("+offset+"px)"},{opacity:1,transform:"translateX(0)"}],{duration:220,easing:"ease-out"});
+}
+
+// Recognize horizontal drags without intercepting normal vertical scrolling,
+// taps, keyboard activation, or a pinch gesture. Capture only after a drag.
+function bindSwipe(el,onSwipe,{onStart=()=>{},onFinish=()=>{}}={}){
+  if(!el)return;
+  let gesture=null,suppressUntil=0;
+  const finish=(e,cancelled=false)=>{
+    const g=gesture;if(!g||e.pointerId!==g.id)return;
+    gesture=null;
+    const dx=e.clientX-g.x,dy=e.clientY-g.y;
+    const horizontal=!cancelled&&Math.abs(dx)>=45&&Math.abs(dx)>Math.abs(dy)*1.25;
+    if(horizontal||g.dragging)suppressUntil=Date.now()+500;
+    if(horizontal){if(e.cancelable)e.preventDefault();onSwipe(dx>0?1:-1);}
+    try{if(el.hasPointerCapture?.(g.id))el.releasePointerCapture(g.id);}catch{}
+    onFinish();
+  };
+  el.addEventListener("pointerdown",e=>{
+    if(!e.isPrimary||e.button!==0||gesture)return;
+    suppressUntil=0;
+    gesture={id:e.pointerId,x:e.clientX,y:e.clientY,dragging:false};
+    onStart();
+  });
+  el.addEventListener("pointermove",e=>{
+    if(!gesture||e.pointerId!==gesture.id)return;
+    const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
+    if(!gesture.dragging&&Math.abs(dx)>10&&Math.abs(dx)>Math.abs(dy)*1.25){
+      gesture.dragging=true;
+      try{el.setPointerCapture?.(e.pointerId);}catch{}
+    }
+  });
+  el.addEventListener("pointerup",e=>finish(e));
+  el.addEventListener("pointercancel",e=>finish(e,true));
+  el.addEventListener("lostpointercapture",e=>{if(e.target===el)finish(e,true);});
+  el.addEventListener("pointerleave",e=>{if(e.pointerType==="mouse"&&!gesture?.dragging)finish(e,true);});
+  el.addEventListener("click",e=>{
+    if(e.detail!==0&&Date.now()<suppressUntil){e.preventDefault();e.stopImmediatePropagation();suppressUntil=0;}
+  },true);
+  el.addEventListener("dragstart",e=>e.preventDefault());
+}
 function getList(mode, slug) {
   let list = PRODUCTS.slice();
   if (mode === "category") list = list.filter((p) => p.category === slug);
@@ -481,7 +544,7 @@ function renderListing(mode, slug) {
     </div>`;
   const sel = $("sortSel"); sel.value = state.sort; sel.onchange = (e) => { state.sort = e.target.value; route(); };
   const si = $("searchInput"); if (document.activeElement !== si) si.value = state.q;
-  if (banner) { bannerIdx = 0; renderBanner(); startBanner(); }
+  if (banner) { bannerIdx = 0; renderBanner(); bindSwipe($("bannerBox"),moveBanner,{onStart:stopBanner,onFinish:startBanner}); startBanner(); }
 }
 
 /* ---------- صفحة المنتج ---------- */
@@ -643,8 +706,8 @@ function viewerURL(value) {
   if(/[\u0000-\u0020\u007f\\]/.test(raw)||(!/^\/(?![\/\\])/.test(raw)&&!/^https?:\/\//i.test(raw)))return "";
   try {const u=new URL(raw,location.href);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password?u.href:"";}catch{return "";}
 }
-let viewerItems=[],viewerIndex=0,viewerProduct=null,viewerFocus=null,viewerResume=false,swipeStart=null;
-function showViewerImage(){
+let viewerItems=[],viewerIndex=0,viewerProduct=null,viewerFocus=null,viewerResume=false;
+function showViewerImage(step=0){
   const item=viewerItems[viewerIndex];if(!item)return;
   $("viewerImage").src=item.src;$("viewerImage").alt=item.title;
   $("viewerTitle").textContent=item.title;$("viewerCount").textContent=(viewerIndex+1)+" / "+viewerItems.length;
@@ -652,6 +715,7 @@ function showViewerImage(){
   const link=$("viewerLink");link.hidden=!item.link;
   if(item.link)link.href=item.link;else link.removeAttribute("href");
   $("viewerProduct").hidden=viewerProduct===null;
+  if(step)animateSlide($("viewerImage"),step);
 }
 function openViewer(items,index,product=null){
   if(!items.length)return;
@@ -672,7 +736,7 @@ function openProductViewer(id,current,selected){
 }
 function moveViewer(step){
   if(viewerItems.length<2)return;
-  viewerIndex=(viewerIndex+step+viewerItems.length)%viewerItems.length;showViewerImage();
+  viewerIndex=(viewerIndex+step+viewerItems.length)%viewerItems.length;showViewerImage(step);
 }
 const imageViewer=$("imageViewer");
 $("viewerClose").addEventListener("click",()=>imageViewer.close());
@@ -681,11 +745,9 @@ $("viewerNext").addEventListener("click",()=>moveViewer(1));
 $("viewerProduct").addEventListener("click",()=>{const id=viewerProduct;viewerResume=false;imageViewer.close();if(id!==null)go("product/"+id);});
 imageViewer.addEventListener("click",e=>{if(e.target===imageViewer)imageViewer.close();});
 imageViewer.addEventListener("keydown",e=>{if(e.key==="ArrowLeft"||e.key==="ArrowRight"){e.preventDefault();moveViewer(e.key==="ArrowLeft"?1:-1);}});
-$("viewerImage").addEventListener("touchstart",e=>{swipeStart=e.changedTouches[0].clientX;},{passive:true});
-$("viewerImage").addEventListener("touchcancel",()=>{swipeStart=null;});
-$("viewerImage").addEventListener("touchend",e=>{if(swipeStart===null)return;const d=e.changedTouches[0].clientX-swipeStart;swipeStart=null;if(Math.abs(d)>50)moveViewer(d>0?1:-1);},{passive:true});
+bindSwipe($("viewerImage"),moveViewer);
 imageViewer.addEventListener("close",()=>{
-  document.documentElement.classList.remove("viewer-open");$("viewerImage").removeAttribute("src");swipeStart=null;
+  document.documentElement.classList.remove("viewer-open");$("viewerImage").removeAttribute("src");
   if(viewerResume&&$("bannerBox"))startBanner();
   if(viewerFocus?.isConnected)viewerFocus.focus({preventScroll:true});
   viewerItems=[];viewerProduct=null;viewerFocus=null;viewerResume=false;
@@ -721,7 +783,7 @@ document.addEventListener("click", (e) => {
   const imageTrigger=e.target.closest("[data-image-banner],[data-image-product],[data-image-current],[data-banner-set]");
   if(imageTrigger){
     const d=imageTrigger.dataset;
-    if(d.bannerSet!==undefined){bannerIdx=Number(d.bannerSet);renderBanner();startBanner();return;}
+    if(d.bannerSet!==undefined){const next=Number(d.bannerSet);if(next!==bannerIdx){const step=next>bannerIdx?1:-1;bannerIdx=next;renderBanner(step);}startBanner();return;}
     if(d.imageBanner!==undefined)return openBannerViewer(Number(d.imageBanner));
     return openProductViewer(Number(d.imageProduct??d.imageCurrent),d.imageCurrent!==undefined,imageTrigger.tagName==="IMG"?imageTrigger.getAttribute("src"):null);
   }
