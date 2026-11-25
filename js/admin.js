@@ -50,6 +50,7 @@ const authHeaders = () => ({ Authorization: "Bearer " + (session?.token || "") }
 /** يعالج 401 من أي طلب: يُخرج المستخدم */
 function handleUnauthorized() {
   storeSession(null);
+  feedbackRequest++;$("feedbackList").textContent="";$("feedbackCount").textContent="";feedbackCursor=null;
   $("appScreen").style.display = "none"; $("loginScreen").style.display = "grid";
   $("loginErr").textContent = "انتهت الجلسة — سجّل الدخول مجدداً";
   window.onbeforeunload = null;
@@ -100,6 +101,7 @@ async function autoLogin() {
 function doLogout() {
   if (isDirty() && !confirm("لديك تعديلات غير محفوظة. الخروج وفقدها؟")) return;
   storeSession(null); DATA = null; SAVED_DATA = null;
+  feedbackRequest++;$("feedbackList").textContent="";$("feedbackCount").textContent="";feedbackCursor=null;
   $("appScreen").style.display = "none"; $("loginScreen").style.display = "grid"; $("loginErr").textContent = "";
   window.onbeforeunload = null;
 }
@@ -164,6 +166,7 @@ function switchTab(tab) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
   document.querySelectorAll(".tab-pane").forEach((p) => (p.style.display = "none"));
   $("tab-" + tab).style.display = "block";
+  if(tab==="feedback")loadFeedback();
 }
 function renderAll() {
   $("storeNameLabel").textContent = DATA.settings.storeName ? "— " + DATA.settings.storeName : "";
@@ -729,6 +732,45 @@ async function resetAll() {
   DATA = normalize({ settings: { storeName: DATA.settings.storeName || "CampusKart", description: "متجر الجامعة", whatsapps: [], bannerIntervalSec: 7 }, banners: [], categories: [], products: [] });
   renderAll(); await saveAll();
 }
+
+/* ---------- سجل آراء الزبائن (خاص بالإدارة) ---------- */
+let feedbackCursor=null,feedbackRequest=0,feedbackLoading=false;
+const feedbackDate=new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Damascus",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"});
+function currentFeedbackMonth(){
+  const p=feedbackDate.formatToParts(new Date());
+  return p.find(x=>x.type==="year").value+"-"+p.find(x=>x.type==="month").value;
+}
+function renderFeedbackRecord(r){
+  const date=new Date(r.timestamp);
+  const stamp=Number.isNaN(date.getTime())?"—":feedbackDate.format(date);
+  return `<article class="feedback-record"><div class="feedback-meta"><strong>رأي مجهول</strong><time dir="ltr" datetime="${esc(r.timestamp)}">${esc(stamp)}</time></div><p class="feedback-text">${esc(r.text)}</p><details><summary>المنتجات المحددة (${r.items?.length||0})</summary><ul>${(r.items||[]).map(i=>`<li>${esc(i.name)} × ${esc(i.qty)} — ${esc(formatAmount(i.total,i.cur))} ${esc(CUR_SYM[i.cur]||i.cur)}</li>`).join("")}</ul></details><p class="hint">محاولة طلب قبل الانتقال إلى واتساب</p></article>`;
+}
+async function loadFeedback(append=false){
+  if(!session)return;
+  if(append&&(feedbackLoading||!feedbackCursor))return;
+  const seq=++feedbackRequest;feedbackLoading=true;
+  const month=$("feedbackMonth");if(!month.value)month.value=currentFeedbackMonth();
+  if(!append){feedbackCursor=null;$("feedbackList").textContent="جاري تحميل الآراء…";}
+  $("moreFeedback").hidden=true;$("refreshFeedback").disabled=true;
+  try{
+    const params=new URLSearchParams({month:month.value});
+    if(append&&feedbackCursor)params.set("cursor",feedbackCursor);
+    const res=await fetch("/api/feedback?"+params,{headers:authHeaders(),cache:"no-store",signal:AbortSignal.timeout(10000)});
+    if(seq!==feedbackRequest||!session)return;
+    if(res.status===401){handleUnauthorized();return;}
+    const j=await res.json();
+    if(!res.ok)throw Error(j.error||"تعذر تحميل الآراء");
+    const html=(j.records||[]).map(renderFeedbackRecord).join("");
+    if(append)$("feedbackList").insertAdjacentHTML("beforeend",html);
+    else $("feedbackList").innerHTML=html||'<p class="hint">لا توجد آراء محفوظة لهذا الشهر.</p>';
+    feedbackCursor=j.nextCursor||null;$("feedbackCount").textContent="عدد الآراء: "+j.total;
+    $("moreFeedback").hidden=!feedbackCursor;
+  }catch(e){if(seq===feedbackRequest){if(!append)$("feedbackList").textContent=e.message||"تعذر التحميل";else toast("تعذر تحميل المزيد","error");$("moreFeedback").hidden=!feedbackCursor;}}
+  finally{if(seq===feedbackRequest){feedbackLoading=false;$("refreshFeedback").disabled=false;}}
+}
+$("feedbackMonth").addEventListener("change",()=>loadFeedback());
+$("refreshFeedback").addEventListener("click",()=>loadFeedback());
+$("moreFeedback").addEventListener("click",()=>loadFeedback(true));
 
 /* ---------- ربط الأحداث ---------- */
 document.addEventListener("click", (e) => {
