@@ -7,12 +7,7 @@
 
 /* ---------- أدوات عامة ---------- */
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const safeSrc = (u) => {
-  const s = String(u || "").trim();
-  if (/^\/(?!\/)/.test(s)) return esc(s);
-  if (/^https?:\/\//i.test(s)) return esc(s);
-  return "";
-};
+const safeSrc = (u) => esc(viewerURL(u));
 const $ = (id) => document.getElementById(id);
 
 /* ---------- البيانات ---------- */
@@ -269,9 +264,9 @@ function orderItems(src) {
     return it && it.availability!=="out" ? {id:it.p.id,variant:it.vi,qty:Number(qty)} : null;
   }).filter(Boolean);
 }
-async function notifyBackground(items, notes) {
+async function notifyBackground(items, notes, inquiryId) {
   try {
-    const res=await fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items,notes}),keepalive:true});
+    const res=await fetch("/api/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(inquiryId ? {kind:"inquiry",id:inquiryId} : {items,notes}),keepalive:true});
     if(!res.ok) console.warn("Order notification unavailable");
   } catch { console.warn("Order notification unavailable"); }
 }
@@ -293,7 +288,7 @@ function buyNowWA(id) {
 }
 function inquireWA(id) {
   const p=byId(id);if(!p)return;
-  openWhatsapp("مرحباً "+(SETTINGS.storeName||"")+"، مهتم بمنتج: "+p.name);
+  if(openWhatsapp("مرحباً "+(SETTINGS.storeName||"")+"، مهتم بمنتج: "+p.name)) notifyBackground(null,"",p.id);
 }
 function checkout() {
   const notes=($("cNotes")?.value||"").trim(),err=$("cErr");
@@ -527,7 +522,7 @@ function renderProduct(id) {
   if (!p) { $("app").innerHTML = '<div class="empty">المنتج غير موجود.</div>'; return; }
   gImg = 0; pQ = 1;
   curVariant = p.variants?.length ? 0 : -1;
-  const imgs = p.images.map(safeSrc).filter(Boolean);
+  const imgs = [...new Set([...p.images,...(p.variants||[]).map(v=>v.image)].map(safeSrc).filter(Boolean))];
   const varBlock = p.variants?.length ? `<div class="block"><h3>اختر النوع</h3><div class="variants-bar" id="varBox">${p.variants.map((v, i) => `<button type="button" class="var-chip${i === 0 ? " active" : ""}" data-var="${i}">${esc(v.name || "نوع " + (i + 1))}</button>`).join("")}</div></div>` : "";
   $("app").innerHTML = `
     <nav class="crumb" aria-label="مسار"><button data-nav="">الرئيسية</button><span>/</span><button data-nav="category/${esc(p.category)}">${esc(catName(p.category))}</button><span>/</span><span style="color:var(--fg)">${esc(p.name)}</span></nav>
@@ -563,7 +558,7 @@ function renderProduct(id) {
 }
 function gSet(i) {
   const p = byId(curProductId()); if (!p) return;
-  const imgs = p.images.map(viewerURL).filter(Boolean);
+  const imgs = [...new Set([...p.images,...(p.variants||[]).map(v=>v.image)].map(viewerURL).filter(Boolean))];
   gImg = i; const m = $("gMain"); if (m && imgs[i]) m.src = imgs[i];
   document.querySelectorAll(".thumbs img").forEach((t, idx) => t.classList.toggle("active", idx === i));
 }
@@ -647,7 +642,7 @@ function renderFooter() {
 /* ---------- معرض تكبير الصور ---------- */
 function viewerURL(value) {
   const raw=String(value||"").trim();
-  if(!/^\/(?![\/\\])/.test(raw)&&!/^https?:\/\//i.test(raw))return "";
+  if(/[\u0000-\u0020\u007f\\]/.test(raw)||(!/^\/(?![\/\\])/.test(raw)&&!/^https?:\/\//i.test(raw)))return "";
   try {const u=new URL(raw,location.href);return /^https?:$/.test(u.protocol)&&!u.username&&!u.password?u.href:"";}catch{return "";}
 }
 let viewerItems=[],viewerIndex=0,viewerProduct=null,viewerFocus=null,viewerResume=false,swipeStart=null;
@@ -739,7 +734,7 @@ document.addEventListener("click", (e) => {
   if (d.add) return addToCart(+d.add, 1);
   if (d.buy) return buyNowWA(+d.buy);
   if (d.var !== undefined) return pickVariant(+d.var);
-  if (d.gstep) { const p = byId(curProductId()); if (!p) return; const n = p.images.map(viewerURL).filter(Boolean).length; if(n)return gSet((gImg + +d.gstep + n) % n);return; }
+  if (d.gstep) { const p = byId(curProductId()); if (!p) return; const n = [...new Set([...p.images,...(p.variants||[]).map(v=>v.image)].map(viewerURL).filter(Boolean))].length; if(n)return gSet((gImg + +d.gstep + n) % n);return; }
   if (d.gset !== undefined) return gSet(+d.gset);
   if (d.pstep) { pQ = Math.max(1, Math.min(999, pQ + +d.pstep)); $("pQty").textContent = pQ; return; }
   if (d.addpage) { addToCart(+d.addpage, pQ, curVariant); pQ = 1; $("pQty").textContent = 1; return; }
