@@ -66,3 +66,35 @@ test("all shipped JavaScript files have valid syntax", async () => {
     }
   }
 });
+
+test("maintenance settings are preserved and default to open", () => {
+  assert.equal(sanitizeStore(catalog).settings.maintenanceMode,false);
+  const closed={...catalog,settings:{...catalog.settings,maintenanceMode:true,maintenanceMessage:"نعمل على تحسين المتجر"}};
+  const clean=sanitizeStore(closed);
+  assert.equal(clean.settings.maintenanceMode,true);
+  assert.equal(clean.settings.maintenanceMessage,"نعمل على تحسين المتجر");
+  assert.equal(clean.products.length,catalog.products.length);
+  assert.throws(()=>buildOrder(closed,{items:[{id:1,qty:1}]}),/maintenance/);
+  assert.throws(()=>buildOrder(closed,{kind:"inquiry",id:1}),/maintenance/);
+});
+test("Telegram uses multipart file attachment for stored photos", async () => {
+  const {sendBatch,internalImage}=await import("../netlify/functions/notify.js");
+  const origin="https://maarefmarket.netlify.app";
+  assert.equal(internalImage("/api/image/abcdef.jpg",origin)[1],"abcdef.jpg");
+  assert.equal(internalImage("https://other.example/api/image/abcdef.jpg",origin),null);
+  assert.equal(internalImage("/api/image/../private",origin),null);
+  const orig=globalThis.fetch;
+  const requests=[];
+  globalThis.fetch=async(url,opts)=>{requests.push({url,body:opts.body});return new Response(JSON.stringify({ok:true}),{status:200,headers:{"Content-Type":"application/json"}});};
+  try{
+    const item={url:origin+"/api/image/abcdef.jpg",caption:"Product",file:new Blob([new Uint8Array([255,216,255,0])],{type:"image/jpeg"}),filename:"abcdef.jpg"};
+    assert.equal(await sendBatch("test-token","123",[item]),true);
+    assert.ok(requests[0].url.endsWith("/sendPhoto"));
+    assert.ok(requests[0].body instanceof FormData);
+    assert.equal(requests[0].body.get("photo").name,"abcdef.jpg");
+    assert.equal(await sendBatch("test-token","123",[item,{url:"https://example.com/photo.jpg",caption:"Other"}]),true);
+    const album=requests[1].body;
+    assert.equal(JSON.parse(album.get("media"))[0].media,"attach://file0");
+    assert.equal(album.get("file0").name,"abcdef.jpg");
+  }finally{globalThis.fetch=orig;}
+});
