@@ -18,7 +18,7 @@ const CUR = [["USD", "$"], ["TRY", "₺"], ["SYP", "ل.س"]];
 const CUR_LABEL = { SYP: "الليرة السورية", USD: "الدولار الأمريكي", TRY: "الليرة التركية" };
 const PRIMARY = "USD";
 const state = { q: "", sort: "newest" };
-let storeReady=false, maintenance=false, statusBusy=false;
+let storeReady=false, maintenance=false, statusBusy=false,catalogVersion=0,remoteVersion=0;
 const DEFAULT_MAINTENANCE="نعمل على تحسين المتجر، سنعود قريباً بإذن الله.";
 
 async function loadData() {
@@ -33,6 +33,7 @@ async function loadData() {
         renderMaintenance(SETTINGS.maintenanceMessage);return false;
       }
       if (!res.ok) continue;
+      catalogVersion=Number(data._version)||0;remoteVersion=catalogVersion;
       SETTINGS = data.settings || {};
       SETTINGS.bannerIntervalSec = Math.max(2, parseInt(SETTINGS.bannerIntervalSec, 10) || 7);
       BANNERS = Array.isArray(data.banners) ? data.banners : [];
@@ -65,6 +66,7 @@ async function checkStoreStatus(){
   if(!res.ok)throw Error("Status unavailable");
   const status=await res.json();
   if(typeof status.maintenanceMode!=="boolean")throw Error("Invalid status");
+  if(Number.isSafeInteger(status.version))remoteVersion=status.version;
   if(status.maintenanceMode){renderMaintenance(status.maintenanceMessage);return false;}
   return true;
 }
@@ -72,14 +74,24 @@ async function refreshStoreStatus(){
   if(statusBusy||document.hidden)return;
   statusBusy=true;
   try {
-    if(await checkStoreStatus()&&!storeReady&&await loadData()){
+    if(await checkStoreStatus()&&!feedbackPending&&(!storeReady||remoteVersion!==catalogVersion)&&await loadData()){
       loadCart();pruneCart();renderFooter();updateCartCount();route();
     }
   }catch{}finally{statusBusy=false;}
 }
 async function canOrder(){
   if(!storeReady||maintenance)return false;
-  try {return await checkStoreStatus();}
+  try {
+    if(!await checkStoreStatus())return false;
+    if(remoteVersion!==catalogVersion){
+      const draft=$("feedbackText").value;
+      if(feedbackPending){feedbackPending=null;$("feedbackDialog").close();}
+      if(await loadData()){pruneCart();renderFooter();updateCartCount();route();}
+      if(draft)unsentFeedbackDraft=draft;
+      toast("تم تحديث بيانات المتجر. راجع الأسعار والكميات وأعد الطلب.","err");return false;
+    }
+    return true;
+  }
   catch {toast("تعذر التحقق من حالة المتجر؛ حاول مرة أخرى","err");return false;}
 }
 
@@ -316,12 +328,12 @@ function checkout() {
 }
 
 /* ---------- رأي الزبون الاختياري ---------- */
-let feedbackPending=null,feedbackBusy=false;
+let feedbackPending=null,feedbackBusy=false,unsentFeedbackDraft="";
 function showOrderFeedback(msg,items,notes){
   if(feedbackPending||feedbackBusy||maintenance||!storeReady)return false;
   const dialog=$("feedbackDialog");
   feedbackPending={msg,items,notes,id:Date.now()+"-"+crypto.randomUUID(),saved:false};
-  $("feedbackText").value="";$("feedbackText").disabled=false;$("feedbackError").textContent="";
+  $("feedbackText").value=unsentFeedbackDraft;unsentFeedbackDraft="";$("feedbackText").disabled=false;$("feedbackError").textContent="";
   $("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;
   dialog.showModal();return true;
 }
@@ -332,6 +344,8 @@ async function finishFeedback(send){
   feedbackBusy=true;$("feedbackSend").disabled=true;$("feedbackSkip").disabled=true;field.disabled=true;
   try{
     if(send&&!pending.saved){
+      if(!await canOrder())return;
+      if(feedbackPending!==pending)return;
       error.textContent="جاري حفظ رأيك…";
       const res=await fetch("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:pending.id,text:value,items:pending.items}),signal:AbortSignal.timeout(7000)});
       const j=await res.json().catch(()=>({}));
