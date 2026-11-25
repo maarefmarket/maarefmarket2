@@ -1,3 +1,4 @@
+import { formatOrderItem, formatOrderTotal, fillOrderTemplate } from "./order-format.js";
 import { decimal, roundPrice, formatMoney, billingCurrency, lineAmount, fromTicks, sumTicks } from "./money.js";
 /* ============================================================
    CampusKart — منطق واجهة المتجر
@@ -283,37 +284,22 @@ const DEFAULT_MSG_TEMPLATE = `السلام عليكم
 شكراً لكم 🌿`;
 
 const CUR_AR = { USD: "بالدولار", TRY: "بالتركي", SYP: "بالسوري" };
-function totalsLines(t) {
-  const lines = [];
-  for (const c of ["USD", "TRY", "SYP"]) {
-    if (t[c] && t[c].count > 0) lines.push(`• ${CUR_AR[c]} (${t[c].count} منتج): *${money(t[c].sum, c)}*`);
-  }
-  return lines;
-}
-function buildOrderMessage(notes, fromCart) {
-  const src = fromCart || cart;
-  const keys = Object.keys(src).filter((k) => resolveItem(k) && resolveItem(k).availability !== "out" && (parseInt(src[k], 10) || 0) > 0);
-  if (!keys.length) return "";
-  const itemLines = keys.map((key) => {
-    const it = resolveItem(key); const q = parseInt(src[key], 10) || 0;
-    const lt = lineTotal(it, q);
-    if (!lt) return `• *${it.name}* × ${q}`;
-    return `• *${it.name}* × ${q} — ${money(lt.unit, lt.cur)} للقطعة = ${money(lt.total, lt.cur)}`;
+function buildOrderMessage(notes,fromCart){
+  const src=fromCart||cart;
+  const keys=Object.keys(src).filter(k=>resolveItem(k)&&resolveItem(k).availability!=="out"&&Number.isInteger(src[k])&&src[k]>0);
+  if(!keys.length)return "";
+  const lines=keys.map(key=>{
+    const it=resolveItem(key),qty=src[key],lt=lineTotal(it,qty);
+    if(!lt)throw Error("Invalid amount");
+    return formatOrderItem({...lt,name:it.name,qty},{bold:true});
   });
-  const totals = totalsLines(cartTotals(src));
-  const totalsText = totals.length ? totals.join("\n") : "—";
-  const notesLine = notes && notes.trim() ? `📝 ملاحظة: ${notes.trim().slice(0, 500)}` : "";
-  let template = SETTINGS.msgTemplate || DEFAULT_MSG_TEMPLATE;
-  // ضمان: إن كان القالب المخصّص بلا {items} أو {totals} نضيفهما حتى لا يضيع الطلب أو الإجمالي
-  if (!template.includes("{items}")) template = template.replace(/\s*$/, "") + "\n\n{items}";
-  if (!template.includes("{totals}")) template += "\n\nالسعر النهائي الإجمالي:\n{totals}";
-  if (!template.includes("{notes}") && notesLine) template += "\n\n{notes}";
-  return template
-    .replace(/{items}/g, itemLines.join("\n"))
-    .replace(/{totals}/g, totalsText)
-    .replace(/{notes}/g, notesLine)
-    .replace(/{store}/g, SETTINGS.storeName || "")
-    .replace(/\n{3,}/g, "\n\n").trim();
+  const totals=cartTotals(src);
+  const totalsText=CUR.filter(([c])=>totals[c].count>0).map(([c])=>formatOrderTotal(c,totals[c].sum,totals[c].count,{bold:true})).join("\n")||"—";
+  return fillOrderTemplate(SETTINGS.msgTemplate||DEFAULT_MSG_TEMPLATE,{
+    items:lines.join("\n\n"),totals:totalsText,
+    notes:notes&&notes.trim()?"📝 ملاحظة: "+notes.trim().slice(0,500):"",
+    store:SETTINGS.storeName||""
+  });
 }
 function orderItems(src) {
   return Object.entries(src).map(([key,qty]) => {
