@@ -8,6 +8,8 @@ import { decimal, roundPrice, formatAmount, normalizeRates, normalizePrices, nor
 "use strict";
 
 const TOKEN_KEY = "ck_admin_session";
+// The visual demo uses only fictional local data; it never authenticates or writes to the server.
+const DEMO=/^deploy-preview-\d+--maarefmarket\.netlify\.app$/.test(location.hostname)&&new URLSearchParams(location.search).get("demo")==="1";
 const CURS = ["USD", "TRY", "SYP"];
 const CUR_NAME = { USD: "دولار", TRY: "تركي", SYP: "سوري" };
 const CUR_SYM = { USD: "$", TRY: "₺", SYP: "ل.س" };
@@ -23,7 +25,7 @@ const DEFAULT_MSG_TEMPLATE = `السلام عليكم
 
 شكراً لكم 🌿`;
 
-let session = loadSession();
+let session = DEMO?null:loadSession();
 let DATA = null, SAVED_DATA = null, VERSION = 0;
 let editingProductId = null, editingCategoryIdx = null, editingBannerIdx = null;
 let mpImages = [], mpVariants = [];
@@ -75,6 +77,7 @@ setInterval(updateSessionLabel, 60000);
 
 /* ---------- الدخول ---------- */
 async function doLogin() {
+  if(DEMO)return;
   const pwd = $("pwdInput").value;
   if (!pwd) { $("loginErr").textContent = "أدخل كلمة المرور"; return; }
   $("loginBtn").disabled = true; $("loginErr").textContent = "";
@@ -89,6 +92,7 @@ async function doLogin() {
   finally { $("loginBtn").disabled = false; }
 }
 async function autoLogin() {
+  if(DEMO)return false;
   if (!session) return false;
   try {
     const res = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: session.token }) });
@@ -99,6 +103,7 @@ async function autoLogin() {
   return false;
 }
 function doLogout() {
+  if(DEMO){location.assign("/");return;}
   if (isDirty() && !confirm("لديك تعديلات غير محفوظة. الخروج وفقدها؟")) return;
   storeSession(null); DATA = null; SAVED_DATA = null;
   feedbackRequest++;$("feedbackList").textContent="";$("feedbackCount").textContent="";feedbackCursor=null;
@@ -121,6 +126,7 @@ function normalize(d) {
   return normalizeCatalogPricing(d);
 }
 async function loadData() {
+  if(DEMO)return;
   toast("جاري التحميل...", "info");
   try {
     const res = await fetch("/api/data", { cache: "no-store", headers: authHeaders() });
@@ -134,6 +140,7 @@ async function loadData() {
 }
 async function saveAll(force = false) {
   if (!DATA) return;
+  if(DEMO){try{DATA=normalizeCatalogPricing(deepClone(DATA));SAVED_DATA=deepClone(DATA);renderAll();updateDirty();toast("تم الحفظ في المعاينة فقط — لا بيانات حقيقية","success");}catch{toast("تعذر تحديث الأسعار التجريبية","error");}return;}
   $("saveBtnTop").disabled = true; toast("جاري الحفظ...", "info");
   try {
     const before=JSON.stringify(DATA),draft=deepClone(DATA);
@@ -199,22 +206,23 @@ function renderProducts() {
   if (fcat) list = list.filter((p) => p.category === fcat);
   if (favail) list = list.filter((p) => p.availability === favail);
   const body = $("productsBody");
+  $("adminProductCount").textContent=list.length+" من "+DATA.products.length+" منتج";
   if (!list.length) { body.innerHTML = '<tr><td colspan="8" class="empty">لا توجد منتجات. اضغط "+ منتج جديد".</td></tr>'; return; }
   const catMap = {}; DATA.categories.forEach((c) => (catMap[c.slug] = c.name));
   body.innerHTML = list.map((p) => {
     const img = safeSrc(p.images[0]);
     const av = ["in", "limited", "out"].includes(p.availability) ? p.availability : "in";
-    return `<tr>
-      <td>${img ? `<img class="thumb-mini" src="${img}" alt="" loading="lazy">` : '<div class="thumb-mini"></div>'}</td>
-      <td><strong>${esc(p.name)}</strong>${p.group ? `<div class="hint">🧩 ${esc(p.group)}</div>` : ""}${p.variants?.length ? `<div class="hint">${p.variants.length} أنواع داخلية</div>` : ""}</td>
-      <td>${esc(catMap[p.category] || p.category)}</td>
-      <td>${formatAmount(p.prices.USD,"USD")}</td><td>${formatAmount(p.prices.TRY,"TRY")}</td><td>${formatAmount(p.prices.SYP,"SYP")}</td>
-      <td><span class="pill ${av}" title="${av === "out" ? "مخفي من الموقع — يبقى هنا فقط" : ""}">${av === "in" ? "متوفر" : av === "limited" ? "محدود" : "🚫 مخفي"}</span></td>
-      <td><div class="row-actions">
-        <button class="btn btn-info btn-sm" data-edit-product="${p.id}" title="تعديل">✏️</button>
-        <button class="btn btn-ghost btn-sm" data-dup-product="${p.id}" title="نسخ">📋</button>
-        <button class="btn btn-accent btn-sm" data-sibling-product="${p.id}" title="إضافة نوع آخر لنفس المجموعة">🧩+</button>
-        <button class="btn btn-danger btn-sm" data-del-product="${p.id}" title="حذف">🗑</button>
+    return `<tr class="admin-product-row">
+      <td class="admin-product-image">${img ? `<img class="thumb-mini" src="${img}" alt="" loading="lazy">` : '<div class="thumb-mini"></div>'}</td>
+      <td class="admin-product-name"><strong>${esc(p.name)}</strong>${p.group ? `<div class="hint">🧩 ${esc(p.group)}</div>` : ""}${p.variants?.length ? `<div class="hint">${p.variants.length} أنواع داخلية</div>` : ""}</td>
+      <td class="admin-product-category" data-label="القسم">${esc(catMap[p.category] || p.category)}</td>
+      <td class="admin-product-price" data-label="دولار">${formatAmount(p.prices.USD,"USD")}</td><td class="admin-product-price" data-label="تركي">${formatAmount(p.prices.TRY,"TRY")}</td><td class="admin-product-price" data-label="سوري">${formatAmount(p.prices.SYP,"SYP")}</td>
+      <td class="admin-product-status"><span class="pill ${av}" title="${av === "out" ? "مخفي من الموقع — يبقى هنا فقط" : ""}">${av === "in" ? "متوفر" : av === "limited" ? "محدود" : "🚫 مخفي"}</span></td>
+      <td class="admin-product-actions"><div class="row-actions">
+        <button class="btn btn-info btn-sm" data-edit-product="${p.id}" title="تعديل" aria-label="تعديل ${esc(p.name)}">✏️<span class="action-label">تعديل</span></button>
+        <button class="btn btn-ghost btn-sm" data-dup-product="${p.id}" title="نسخ" aria-label="نسخ ${esc(p.name)}">📋<span class="action-label">نسخ</span></button>
+        <button class="btn btn-accent btn-sm" data-sibling-product="${p.id}" title="إضافة نوع آخر لنفس المجموعة" aria-label="إضافة نوع آخر">🧩+<span class="action-label">نوع</span></button>
+        <button class="btn btn-danger btn-sm" data-del-product="${p.id}" title="حذف" aria-label="حذف ${esc(p.name)}">🗑<span class="action-label">حذف</span></button>
       </div></td></tr>`;
   }).join("");
 }
@@ -427,6 +435,7 @@ async function compressImage(file) {
   return blob;
 }
 async function uploadImageBlob(blob) {
+  if(DEMO)throw Error("رفع الصور غير متاح في المعاينة");
   const res = await fetch("/api/upload", { method: "POST", headers: { "Content-Type": blob.type || "image/jpeg", ...authHeaders() }, body: blob });
   if (res.status === 401) { handleUnauthorized(); throw new Error("انتهت الجلسة"); }
   const j = await res.json().catch(() => ({ error: "استجابة غير صالحة" }));
@@ -779,6 +788,7 @@ function renderFeedbackRecord(r){
   return `<article class="feedback-record"><div class="feedback-meta"><strong>رأي مجهول</strong><time dir="ltr" datetime="${esc(r.timestamp)}">${esc(stamp)}</time></div><p class="feedback-text">${esc(r.text)}</p><details><summary>المنتجات المحددة (${r.items?.length||0})</summary><ul>${(r.items||[]).map(i=>`<li>${esc(i.name)} × ${esc(i.qty)} — ${esc(formatAmount(i.total,i.cur))} ${esc(CUR_SYM[i.cur]||i.cur)}</li>`).join("")}</ul></details><p class="hint">محاولة طلب قبل الانتقال إلى واتساب</p></article>`;
 }
 async function loadFeedback(append=false){
+  if(DEMO){const m=$("feedbackMonth");if(!m.value)m.value=currentFeedbackMonth();const sample={timestamp:new Date().toISOString(),text:"مثال تجريبي: أتمنى إضافة المزيد من المنتجات.",items:[{name:"عصير تجريبي",qty:2,cur:"USD",total:2.5}]};const has=m.value===currentFeedbackMonth();$("feedbackList").innerHTML=has?renderFeedbackRecord(sample):"<p>لا توجد آراء في هذا الشهر.</p>";$("feedbackCount").textContent="آراء تجريبية: "+(has?1:0);$("moreFeedback").hidden=true;return;}
   if(!session)return;
   if(append&&(feedbackLoading||!feedbackCursor))return;
   const seq=++feedbackRequest;feedbackLoading=true;
@@ -886,5 +896,10 @@ $("themeToggleBtn").addEventListener("click", () => applyAdminTheme(document.doc
   try { saved = localStorage.getItem("ck_admin_theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"); } catch {}
   applyAdminTheme(saved);
   bindSettings(); bindImageDropzone(); bindRatesTab(); bindColorsTab();
+  if(DEMO){
+    const categories=[{slug:"drinks",name:"مشروبات"},{slug:"snacks",name:"وجبات خفيفة"}];
+    DATA=normalize({settings:{storeName:"Maaref Market — معاينة",description:"بيانات تجريبية فقط",rates:{USD_TRY:33,USD_SYP:14000},whatsapps:[],bannersEnabled:true,bannerIntervalSec:7},categories,banners:[],products:[{id:1,name:"عصير تجريبي",category:"drinks",prices:{USD:1.25},availability:"in",images:[]},{id:2,name:"بسكويت تجريبي",category:"snacks",prices:{USD:.75},availability:"limited",images:[]},{id:3,name:"شيبس تجريبي",category:"snacks",prices:{USD:1.5},availability:"out",images:[]}]});
+    SAVED_DATA=deepClone(DATA);$("loginScreen").style.display="none";$("appScreen").style.display="block";$("adminDemoNotice").hidden=false;$("sessionLabel").textContent="معاينة محلية";renderAll();updateDirty();return;
+  }
   if (!(await autoLogin())) { $("loginScreen").style.display = "grid"; $("appScreen").style.display = "none"; }
 })();

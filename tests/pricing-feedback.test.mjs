@@ -78,7 +78,7 @@ async function storefront(){
   };
   const ctx={...money,document,window:{addEventListener(){}},location,history:{},fetch,URL,AbortSignal,crypto:{randomUUID},console,setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){}};
   const script=source.replace(/^import .*;\n/,"").split("(async function init()")[0]+
-    "\n({setup(d){SETTINGS=d.settings;PRODUCTS=d.products;cart={'1':2,'2':3};storeReady=true;},buyNowWA,finishFeedback,checkout,cartTotals,renderMaintenance,getCart:()=>cart});";
+    "\n({setup(d){SETTINGS=d.settings;PRODUCTS=d.products;cart={'1':2,'2':3};storeReady=true;},buyNowWA,finishFeedback,checkout,cartTotals,renderMaintenance,getCart:()=>cart,updateShopDock,updateCartCount,cardStep,cardHTML,openCategories});";
   const api=runInNewContext(script,ctx);api.setup(sanitizeStore(catalog));
   return {api,node,calls,location,setFail(v){fail=v;},setClosed(v){closed=v;}};
 }
@@ -110,4 +110,40 @@ test("maintenance while feedback open blocks the order",async()=>{
   await t.api.finishFeedback(false);
   assert.equal(t.location.assigned,undefined);
   assert.equal(t.calls.filter(x=>x.url==="/api/notify").length,0);
+});
+
+test("responsive cart dock uses all selected currencies and updates quantities",async()=>{
+  const t=await storefront();
+  t.api.updateShopDock();
+  assert.equal(t.node("shopDock").hidden,false);
+  assert.equal(t.node("cartSummary").hidden,false);
+  assert.equal(t.node("summaryCount").textContent,"5 قطعة محددة");
+  assert.match(t.node("summaryTotal").textContent,/2\.50 \$/);
+  assert.match(t.node("summaryTotal").textContent,/84,000 ل\.س/);
+  t.api.cardStep(1,1);
+  assert.equal(t.node("summaryCount").textContent,"6 قطعة محددة");
+  t.location.hash="#cart";t.api.updateShopDock();
+  assert.equal(t.node("cartSummary").hidden,true);
+  assert.equal(t.node("shopDock").hidden,false);
+  t.api.renderMaintenance("صيانة");assert.equal(t.node("shopDock").hidden,true);
+});
+test("responsive product cards retain purchase action, quantities, price and accessible name",async()=>{
+  const t=await storefront();
+  const html=t.api.cardHTML(sanitizeStore(catalog).products[0]);
+  assert.match(html,/class="card selected"/);
+  assert.match(html,/data-buy="1"/);
+  assert.match(html,/data-step="1\|1"/);
+  assert.match(html,/class="card-line-total"/);
+  assert.match(html,/2\.50 \$/);
+  assert.doesNotMatch(html,/data-add="1"/);
+});
+test("preview admin demo has no production authentication bypass",async()=>{
+  const source=await readFile(new URL("../js/admin.js",import.meta.url),"utf8");
+  const line=source.split("\n").find(l=>l.startsWith("const DEMO="));
+  const detect=(hostname,search)=>runInNewContext(line+"\nDEMO",{location:{hostname,search},URLSearchParams});
+  assert.equal(detect("deploy-preview-5--maarefmarket.netlify.app","?demo=1"),true);
+  assert.equal(detect("maarefmarket.netlify.app","?demo=1"),false);
+  assert.equal(detect("deploy-preview-5--maarefmarket.netlify.app",""),false);
+  assert.match(source,/async function saveAll\(force = false\) \{[\s\S]*?if\(DEMO\)/);
+  assert.match(source,/async function uploadImageBlob\(blob\) \{\s*if\(DEMO\)throw/);
 });

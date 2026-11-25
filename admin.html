@@ -61,6 +61,7 @@
   </div>
 
   <main class="container">
+    <div id="adminDemoNotice" class="card brand" hidden><strong>معاينة تصميم لوحة التحكم</strong><p class="hint">بيانات افتراضية. التعديلات محلية مؤقتة ولا تُنشر ولا تُحفظ في المتجر الحقيقي.</p></div>
 
     <!-- المنتجات -->
     <section id="tab-products" class="tab-pane">
@@ -77,7 +78,8 @@
         </select>
       </div>
       <div class="hint" style="margin:-6px 0 10px">🚫 المنتج بحالة <strong>غير متوفر</strong> يختفي من الموقع تماماً للزوار (كأنه محذوف) لكنه يبقى هنا مع كل بياناته — غيّر حالته إلى متوفر ليعود.</div>
-      <div class="table-wrap">
+      <p id="adminProductCount" class="hint product-count" role="status"></p>
+      <div class="table-wrap product-table">
         <table>
           <thead><tr><th>الصورة</th><th>الاسم</th><th>القسم</th><th>$</th><th>₺</th><th>ل.س</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
           <tbody id="productsBody"></tbody>
