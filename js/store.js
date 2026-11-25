@@ -1,4 +1,4 @@
-import { formatOrderItem, formatOrderTotal, fillOrderTemplate } from "./order-format.js";
+import { formatOrderItem, formatGrandTotals, fillOrderTemplate } from "./order-format.js";
 import { decimal, roundPrice, formatMoney, billingCurrency, lineAmount, fromTicks, sumTicks } from "./money.js";
 /* ============================================================
    CampusKart — منطق واجهة المتجر
@@ -293,8 +293,8 @@ function buildOrderMessage(notes,fromCart){
     if(!lt)throw Error("Invalid amount");
     return formatOrderItem({...lt,name:it.name,qty},{bold:true});
   });
-  const totals=cartTotals(src);
-  const totalsText=CUR.filter(([c])=>totals[c].count>0).map(([c])=>formatOrderTotal(c,totals[c].sum,totals[c].count,{bold:true})).join("\n")||"—";
+  cartTotals(src); // Retain existing total range validation.
+  const totalsText=formatGrandTotals(keys.map(key=>({prices:resolveItem(key).prices,qty:src[key]})),SETTINGS.rates,{bold:true});
   return fillOrderTemplate(SETTINGS.msgTemplate||DEFAULT_MSG_TEMPLATE,{
     items:lines.join("\n\n"),totals:totalsText,
     notes:notes&&notes.trim()?"📝 ملاحظة: "+notes.trim().slice(0,500):"",
