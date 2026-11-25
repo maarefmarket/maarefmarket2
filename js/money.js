@@ -42,7 +42,7 @@ export function normalizeRates(raw={}){
   raw=raw&&typeof raw==="object"?raw:{};
   const pair=(a,b)=>{
     const n=decimal(raw[a+"_"+b]),inv=decimal(raw[b+"_"+a]);
-    return n|| (inv?1/inv:0);
+    return Math.min(1e9,n||(inv?1/inv:0));
   };
   let tryRate=pair("USD","TRY"),sypRate=pair("USD","SYP");
   if(!tryRate&&sypRate)tryRate=sypRate*pair("SYP","TRY");
@@ -84,11 +84,11 @@ export function lineAmount(prices,show,qty){
   const cur=billingCurrency(prices,show);
   if(!cur||!Number.isSafeInteger(qty)||qty<1||qty>999)return null;
   const unitTicks=priceTicks(prices[cur],cur),totalTicks=unitTicks*qty;
-  if(!unitTicks||!Number.isSafeInteger(totalTicks)||(cur==="SYP"&&!Number.isSafeInteger(totalTicks*10)))return null;
+  if(!unitTicks||!Number.isSafeInteger(totalTicks)||fromTicks(totalTicks,cur)>MAX)return null;
   return {cur,unit:fromTicks(unitTicks,cur),total:fromTicks(totalTicks,cur),unitTicks,totalTicks};
 }
 export function sumTicks(totals,cur,ticks){
   const next=(totals[cur]||0)+ticks;
-  if(!Number.isSafeInteger(next)||(cur==="SYP"&&!Number.isSafeInteger(next*10)))throw new RangeError("Order total too large");
+  if(!Number.isSafeInteger(next)||fromTicks(next,cur)>MAX)throw new RangeError("Order total too large");
   totals[cur]=next;return next;
 }
