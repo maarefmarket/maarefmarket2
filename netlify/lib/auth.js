@@ -26,7 +26,7 @@ export function json(body, status = 200, extra = {}) {
 }
 
 export function noContent(extra = {}) {
-  return new Response("", { status: 204, headers: { "Cache-Control": "no-store", ...extra } });
+  return new Response(null, { status: 204, headers: { "Cache-Control": "no-store", ...extra } });
 }
 
 /* ------------------------------------------------------------------ */
@@ -91,7 +91,7 @@ export async function rateLimit(bucket, key, { limit, windowMs }) {
     const store = getStore({ name: "campuskart-ratelimit", consistency: "strong" });
     const k = `${bucket}:${String(key).replace(/[^a-zA-Z0-9:._-]/g, "_").slice(0, 80)}`;
     const now = Date.now();
-    let rec = await store.get(k, { type: "json" }).catch(() => null);
+    let rec = await store.get(k, { type: "json" });
     if (!rec || typeof rec.resetAt !== "number" || rec.resetAt <= now) {
       rec = { count: 0, resetAt: now + windowMs };
     }
@@ -103,9 +103,9 @@ export async function rateLimit(bucket, key, { limit, windowMs }) {
       retryAfterSec: Math.max(1, Math.ceil((rec.resetAt - now) / 1000)),
     };
   } catch (e) {
-    // في حال تعطّل التخزين لا نُعطّل الموقع (fail-open) لكن نسجّل
+    // عند تعطل التخزين نوقف العمليات المحددة بالمعدل مؤقتاً.
     console.error("rateLimit error", e);
-    return { allowed: true, remaining: limit, retryAfterSec: 0 };
+    return { allowed: false, remaining: 0, retryAfterSec: 60 };
   }
 }
 
