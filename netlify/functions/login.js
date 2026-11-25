@@ -8,7 +8,7 @@
 
 import {
   json, noContent, corsHeaders, isSameOrigin, clientIp,
-  rateLimit, safeEqual, adminPasswordStatus, issueToken, verifyToken,
+  rateLimit, safeEqual, adminPasswordStatus, issueToken, verifyToken, isProductionRequest,
 } from "../lib/auth.js";
 
 export default async (req, context) => {
@@ -17,11 +17,12 @@ export default async (req, context) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405, cors);
   if (!isSameOrigin(req, true)) return json({ error: "مصدر الطلب غير مسموح" }, 403, cors);
 
+  if (!isProductionRequest(req)) return json({error:"النسخة التجريبية للقراءة فقط"},403,cors);
   const st = adminPasswordStatus();
-  if (!st.ok) return json({ error: st.error }, 500, cors);
+  if (!st.ok) return json({ error: "إعدادات الإدارة غير متاحة" }, 503, cors);
 
   let body;
-  try { body = await req.json(); } catch { return json({ error: "JSON غير صالح" }, 400, cors); }
+  try { const raw=await req.text(); if(Buffer.byteLength(raw,"utf8")>4096)return json({error:"طلب كبير"},413,cors); body=JSON.parse(raw); } catch { return json({ error: "JSON غير صالح" }, 400, cors); }
   body = body && typeof body === "object" ? body : {};
 
   /* --- التحقق من توكن قائم (دخول تلقائي) --- */
@@ -51,4 +52,4 @@ export default async (req, context) => {
   return json({ ok: true, token, exp }, 200, cors);
 };
 
-export const config = { path: "/api/login" };
+export const config = { path: "/api/login", rateLimit: { windowLimit: 15, windowSize: 60, aggregateBy: ["ip", "domain"] } };

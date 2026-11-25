@@ -41,6 +41,15 @@
   <div class="copy" id="copy"></div>
 </footer>
 
+<dialog id="imageViewer" class="image-viewer" aria-labelledby="viewerTitle">
+  <div class="viewer-header"><h2 id="viewerTitle"></h2><button type="button" id="viewerClose" aria-label="إغلاق">×</button></div>
+  <div class="viewer-stage">
+    <img id="viewerImage" alt="">
+    <button type="button" id="viewerPrev" class="viewer-nav viewer-prev" aria-label="الصورة السابقة">›</button>
+    <button type="button" id="viewerNext" class="viewer-nav viewer-next" aria-label="الصورة التالية">‹</button>
+  </div>
+  <div class="viewer-footer"><span id="viewerCount" aria-live="polite" dir="ltr"></span><a id="viewerLink" class="btn btn-outline" target="_blank" rel="noopener noreferrer" hidden>فتح رابط الإعلان</a><button type="button" id="viewerProduct" class="btn btn-primary" hidden>تفاصيل المنتج</button></div>
+</dialog>
 <script src="js/store.js"></script>
-<script src="https://www.genspark.ai/sandbox_inspect.js"></script></body>
+</body>
 </html>

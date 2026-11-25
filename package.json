@@ -6,12 +6,14 @@
   "type": "module",
   "scripts": {
     "dev": "netlify dev",
-    "start": "netlify dev"
+    "start": "netlify dev",
+    "build": "node scripts/build.mjs",
+    "test": "node --test"
   },
   "dependencies": {
-    "@netlify/blobs": "^8.1.0"
+    "@netlify/blobs": "11.1.11"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12.0"
   }
 }

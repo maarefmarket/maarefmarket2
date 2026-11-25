@@ -26,12 +26,21 @@ export function json(body, status = 200, extra = {}) {
 }
 
 export function noContent(extra = {}) {
-  return new Response("", { status: 204, headers: { "Cache-Control": "no-store", ...extra } });
+  return new Response(null, { status: 204, headers: { "Cache-Control": "no-store", ...extra } });
 }
 
 /* ------------------------------------------------------------------ */
 /* Same-origin / CORS                                                   */
 /* ------------------------------------------------------------------ */
+// Preview deployments must never mutate shared site-wide Blobs or send real orders.
+export function isProductionRequest(req) {
+  try {
+    const origin = new URL(req.url).origin;
+    const canonical = new URL(process.env.URL || "https://maarefmarket.netlify.app").origin;
+    return origin === canonical || origin === "https://maarefmarket.netlify.app";
+  } catch { return false; }
+}
+
 export function siteOrigins(req) {
   const set = new Set();
   try { set.add(new URL(req.url).origin); } catch {}
@@ -39,8 +48,8 @@ export function siteOrigins(req) {
     const v = process.env[k];
     if (v) { try { set.add(new URL(v).origin); } catch {} }
   }
-  // بيئة التطوير المحلية
-  set.add("http://localhost:8888");
+  // Local development origin is accepted only for a local request.
+  if (new URL(req.url).hostname === "localhost") set.add("http://localhost:8888");
   return set;
 }
 
@@ -78,7 +87,6 @@ export function clientIp(req, context) {
   return (
     (context && context.ip) ||
     req.headers.get("x-nf-client-connection-ip") ||
-    (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() ||
     "unknown"
   );
 }
@@ -90,22 +98,23 @@ export async function rateLimit(bucket, key, { limit, windowMs }) {
   try {
     const store = getStore({ name: "campuskart-ratelimit", consistency: "strong" });
     const k = `${bucket}:${String(key).replace(/[^a-zA-Z0-9:._-]/g, "_").slice(0, 80)}`;
-    const now = Date.now();
-    let rec = await store.get(k, { type: "json" }).catch(() => null);
-    if (!rec || typeof rec.resetAt !== "number" || rec.resetAt <= now) {
-      rec = { count: 0, resetAt: now + windowMs };
+    for (let attempt=0;attempt<4;attempt++) {
+      const now=Date.now();
+      const entry=await store.getWithMetadata(k,{type:"json"});
+      let rec=entry?.data;
+      if(!rec || !Number.isSafeInteger(rec.count) || typeof rec.resetAt!=="number" || rec.resetAt<=now) rec={count:0,resetAt:now+windowMs};
+      const retryAfterSec=Math.max(1,Math.ceil((rec.resetAt-now)/1000));
+      if(rec.count>=limit)return {allowed:false,remaining:0,retryAfterSec};
+      if(entry && !entry.etag)throw new Error("Missing rate-limit ETag");
+      const next={count:rec.count+1,resetAt:rec.resetAt};
+      const written=await store.setJSON(k,next,entry?{onlyIfMatch:entry.etag}:{onlyIfNew:true});
+      if(written.modified)return {allowed:true,remaining:Math.max(0,limit-next.count),retryAfterSec};
     }
-    rec.count += 1;
-    await store.setJSON(k, rec);
-    return {
-      allowed: rec.count <= limit,
-      remaining: Math.max(0, limit - rec.count),
-      retryAfterSec: Math.max(1, Math.ceil((rec.resetAt - now) / 1000)),
-    };
+    return {allowed:false,remaining:0,retryAfterSec:2};
   } catch (e) {
-    // في حال تعطّل التخزين لا نُعطّل الموقع (fail-open) لكن نسجّل
-    console.error("rateLimit error", e);
-    return { allowed: true, remaining: limit, retryAfterSec: 0 };
+    // عند تعطل التخزين نوقف العمليات المحددة بالمعدل مؤقتاً.
+    console.error("Rate-limit storage unavailable");
+    return { allowed: false, remaining: 0, retryAfterSec: 60 };
   }
 }
 
@@ -173,8 +182,9 @@ export function bearer(req) {
 
 /** يُرجع null إذا كانت الجلسة صالحة، أو Response خطأ جاهزة */
 export function requireAuth(req) {
+  if (!isProductionRequest(req)) return json({ error: "النسخة التجريبية للقراءة فقط" }, 403, corsHeaders(req));
   const st = adminPasswordStatus();
-  if (!st.ok) return json({ error: st.error }, 500, corsHeaders(req));
+  if (!st.ok) return json({ error: "إعدادات الإدارة غير متاحة" }, 503, corsHeaders(req));
   if (!isSameOrigin(req, false)) return json({ error: "مصدر الطلب غير مسموح" }, 403, corsHeaders(req));
   const session = verifyToken(bearer(req));
   if (!session) return json({ error: "الجلسة غير صالحة أو منتهية — سجّل الدخول مجدداً", code: "UNAUTHORIZED" }, 401, corsHeaders(req));

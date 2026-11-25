@@ -185,6 +185,14 @@
     <section id="tab-settings" class="tab-pane" style="display:none">
       <div class="section-head"><div><h2>⚙️ إعدادات المتجر</h2><p>اسم المتجر، أرقام التواصل، ملاحظة التوصيل.</p></div></div>
       <div class="card">
+        <h3>🛠️ وضع الصيانة</h3>
+        <p class="hint" id="maintenanceStatus" role="status"></p>
+        <label><input type="checkbox" id="setMaintenanceMode"> إيقاف المتجر للزوار (قيد الصيانة)</label>
+        <label class="label mt" for="setMaintenanceMessage">رسالة الصيانة للزوار</label>
+        <textarea id="setMaintenanceMessage" class="field" rows="3" maxlength="400" placeholder="نعمل على تحسين المتجر، سنعود قريباً بإذن الله."></textarea>
+        <p class="hint mt">اضغط حفظ للنشر. ستبقى لوحة التحكم متاحة، ولن تُحذف المنتجات أو السلال.</p>
+      </div>
+      <div class="card">
         <h3>🏪 معلومات المتجر</h3>
         <div class="row cols-2">
           <div><label class="label">اسم المتجر</label><input id="setStoreName" class="field" placeholder="CampusKart" maxlength="120"></div>
@@ -392,5 +400,5 @@
 
 <div id="toast" role="status"></div>
 <script src="js/admin.js"></script>
-<script src="https://www.genspark.ai/sandbox_inspect.js"></script></body>
+</body>
 </html>

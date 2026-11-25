@@ -30,7 +30,11 @@ let mpImages = [], mpVariants = [];
 /* ---------- أدوات ---------- */
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const safeSrc = (u) => { const s = String(u || "").trim(); return /^(\/(?!\/)|https?:\/\/)/i.test(s) ? esc(s) : ""; };
+const safeSrc = (u) => {
+  const s=String(u||"").trim();
+  if(!/^\/(?![\/\\])/.test(s)&&!/^https?:\/\//i.test(s))return "";
+  try {const url=new URL(s,location.href);return /^https?:$/.test(url.protocol)&&!url.username&&!url.password?esc(url.href):"";}catch{return "";}
+};
 const deepClone = (o) => JSON.parse(JSON.stringify(o));
 function toast(msg, type) {
   const t = $("toast"); t.textContent = msg; t.className = "show " + (type || "info");
@@ -116,7 +120,8 @@ function normalize(d) {
 async function loadData() {
   toast("جاري التحميل...", "info");
   try {
-    const res = await fetch("/api/data", { cache: "no-store" });
+    const res = await fetch("/api/data", { cache: "no-store", headers: authHeaders() });
+    if (res.status === 401) { handleUnauthorized(); return; }
     if (!res.ok) throw new Error("HTTP " + res.status);
     const j = await res.json();
     VERSION = Number(j._version) || 0; delete j._version;
@@ -141,7 +146,7 @@ async function saveAll(force = false) {
     }
     if (!res.ok) throw new Error(j.error || "HTTP " + res.status);
     VERSION = Number(j.version) || VERSION;
-    SAVED_DATA = deepClone(DATA); updateDirty();
+    SAVED_DATA = deepClone(DATA); updateDirty(); renderMaintenanceStatus();
     toast("✓ تم الحفظ ونُشر للجميع", "success");
   } catch (e) { toast("فشل الحفظ: " + (e.message || e), "error"); }
   finally { $("saveBtnTop").disabled = false; }
@@ -581,12 +586,20 @@ function saveBanner() {
 }
 
 /* ---------- الإعدادات ---------- */
+function renderMaintenanceStatus() {
+  const active=SAVED_DATA?.settings?.maintenanceMode===true;
+  const pending=(DATA?.settings?.maintenanceMode===true)!==active;
+  $("maintenanceStatus").textContent=(active?"الحالة المنشورة: المتجر قيد الصيانة":"الحالة المنشورة: المتجر مفتوح")+ (pending?" — تغيير غير محفوظ":"");
+}
 function renderSettings() {
   const s = DATA.settings;
   $("setStoreName").value = s.storeName || ""; $("setDescription").value = s.description || "";
   $("setBannerInterval").value = s.bannerIntervalSec; $("setDelivery").value = s.deliveryNote || "";
   $("setInstagram").value = s.instagram || ""; $("setEmail").value = s.email || "";
   $("setBannersEnabled").checked = s.bannersEnabled !== false;
+  $("setMaintenanceMode").checked = s.maintenanceMode === true;
+  $("setMaintenanceMessage").value = s.maintenanceMessage || "";
+  renderMaintenanceStatus();
   $("setMsgTemplate").value = s.msgTemplate || DEFAULT_MSG_TEMPLATE;
   renderWhatsappList();
 }
@@ -614,6 +627,8 @@ function bindSettings() {
   }));
   $("setBannerInterval").addEventListener("input", (e) => { DATA.settings.bannerIntervalSec = Math.max(2, Math.min(120, parseInt(e.target.value, 10) || 7)); updateDirty(); });
   $("setBannersEnabled").addEventListener("change", (e) => { DATA.settings.bannersEnabled = e.target.checked; updateDirty(); });
+  $("setMaintenanceMode").addEventListener("change", e => { if(!DATA)return; DATA.settings.maintenanceMode=e.target.checked; updateDirty(); renderMaintenanceStatus(); });
+  $("setMaintenanceMessage").addEventListener("input", e => { if(!DATA)return; DATA.settings.maintenanceMessage=e.target.value; updateDirty(); });
   $("setMsgTemplate").addEventListener("input", (e) => { DATA.settings.msgTemplate = e.target.value; updateDirty(); });
   $("whatsappList").addEventListener("input", (e) => {
     const i = e.target.dataset.waInput; if (i == null) return;
