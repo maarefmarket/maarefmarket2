@@ -58,6 +58,8 @@ export default async (req, context) => {
       let rec = await store.getWithMetadata(KEY, { type: "json" });
       let data = rec?.data || null;
       let version = Number(rec?.metadata?.version) || 0;
+      const statusOnly=new URL(req.url).searchParams.get("status")==="1";
+      if(statusOnly&&data)return json({maintenanceMode:data.settings?.maintenanceMode===true,maintenanceMessage:String(data.settings?.maintenanceMessage||"").slice(0,400),version},200,cors);
 
       if (!data) {
         const backup = await store.getWithMetadata(BACKUP_KEY, {type:"json"});
@@ -78,7 +80,7 @@ export default async (req, context) => {
       }
 
       const mode=data.settings.maintenanceMode===true;
-      const status={maintenanceMode:mode,maintenanceMessage:data.settings.maintenanceMessage||""};
+      const status={maintenanceMode:mode,maintenanceMessage:data.settings.maintenanceMessage||"",version};
       if(new URL(req.url).searchParams.get("status")==="1")return json(status,200,cors);
       const adminRequested=!!req.headers.get("authorization");
       if(adminRequested){const denied=requireAuth(req);if(denied)return denied;}
