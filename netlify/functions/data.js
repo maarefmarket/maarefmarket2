@@ -10,7 +10,7 @@ import { getStore } from "@netlify/blobs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { json, noContent, corsHeaders, requireAuth, clientIp, rateLimit } from "../lib/auth.js";
+import { json, noContent, corsHeaders, requireAuth, clientIp, rateLimit, isProductionRequest } from "../lib/auth.js";
 import { sanitizeStore, hasValidShape, LIMITS } from "../lib/validate.js";
 
 const STORE_NAME = "campuskart-data";
@@ -63,8 +63,10 @@ export default async (req, context) => {
         const backup = await store.get(BACKUP_KEY, { type: "json" });
         data = sanitizeStore(backup || (await loadDefaults()));
         version = Date.now();
-        await store.setJSON(KEY, data, { metadata: { version: String(version) } });
-        await store.setJSON(BACKUP_KEY, data);
+        if (isProductionRequest(req)) {
+          await store.setJSON(KEY, data, { metadata: { version: String(version) } });
+          await store.setJSON(BACKUP_KEY, data);
+        }
       } else {
         data = sanitizeStore(data);
       }
