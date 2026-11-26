@@ -6,29 +6,35 @@ const css=await readFile(new URL("../css/style.css",import.meta.url),"utf8");
 const admin=await readFile(new URL("../css/admin.css",import.meta.url),"utf8");
 const block=source.slice(source.indexOf("function renderBanner("),source.indexOf("function startBanner("));
 function fixture(){
-  const box={innerHTML:"",querySelector:()=>null};
+  const attrs=new Map(),box={innerHTML:"",setAttribute:(k,v)=>attrs.set(k,v),removeAttribute:k=>attrs.delete(k),querySelector:()=>null};
   const run=new Function("$","BANNERS","bannerIdx","safeSrc","esc","document","animateSlide",block+"\nreturn renderBanner;");
-  const render=banner=>run(()=>box,[banner],0,x=>x||"",x=>String(x||"").replace(/</g,"&lt;").replace(/"/g,"&quot;"),{querySelectorAll:()=>[]},()=>{})();
-  return {box,render};
+  const render=(banner)=>run(()=>box,[banner],0,x=>x||"",x=>String(x||"").replace(/</g,"&lt;").replace(/"/g,"&quot;"),{querySelectorAll:()=>[]},()=>{})();
+  return {attrs,box,render};
 }
-test("original banner overlays caption and retains image zoom",()=>{
-  const {box,render}=fixture();
+test("adaptive banner is the default without trial flags, caption covers no image",()=>{
+  const {attrs,box,render}=fixture();
   render({image:"/api/image/ad.png",eyebrow:"Store",title:"<Offer>"});
-  assert.match(box.innerHTML,/<img src="\/api\/image\/ad.png" alt=""><div class="ov"><\/div><div class="txt">/);
+  assert.equal(attrs.get("data-banner-fit"),"adaptive");
+  assert.match(box.innerHTML,/class="banner-image-frame"><img/);
+  assert.match(box.innerHTML,/<\/div><div class="txt">/);
   assert.match(box.innerHTML,/&lt;Offer>/);
+  assert.doesNotMatch(box.innerHTML,/class="ov"/);
   assert.match(box.innerHTML,/data-image-banner="0"/);
-  assert.doesNotMatch(block,/data-banner-fit|bannerDemo|banner-image-frame/);
+  assert.doesNotMatch(block,/bannerDemo|deploy-preview/);
 });
-test("original text-only banners retain link without image controls",()=>{
-  const {box,render}=fixture();
+test("text-only banners restore original text treatment and link, no empty image frame",()=>{
+  const {attrs,box,render}=fixture();
+  render({image:"/api/image/ad.png"});
   render({title:"Text only",link:"https://example.org/"});
+  assert.equal(attrs.has("data-banner-fit"),false);
   assert.match(box.innerHTML,/class="ov"/);
   assert.match(box.innerHTML,/href="https:\/\/example.org\/"/);
-  assert.doesNotMatch(box.innerHTML,/<img|data-image-banner/);
+  assert.doesNotMatch(box.innerHTML,/banner-image-frame|data-image-banner/);
 });
-test("original fixed responsive banner and admin preview styles restored",()=>{
-  assert.match(css,/\.banner img\{[^}]*object-fit:cover/);
-  assert.match(css,/\.banner,\.banner \.txt\{min-height:clamp\(160px,23vw,280px\)/);
-  assert.match(admin,/\.banner-preview\{[^}]*max-height:160px;object-fit:cover/);
-  assert.doesNotMatch(css,/data-banner-fit|data-banner-trial/);
+test("image-only banners omit empty caption; storefront and admin contain instead of crop",()=>{
+  const {box,render}=fixture();render({image:"/api/image/ad.png"});
+  assert.doesNotMatch(box.innerHTML,/class="txt"/);
+  assert.match(css,/#bannerBox\[data-banner-fit="adaptive"\] img\{[^}]*height:auto;max-height:clamp\(280px,50vw,440px\);object-fit:contain/);
+  assert.match(admin,/\.banner-preview\{[^}]*object-fit:contain/);
+  assert.doesNotMatch(css,/data-banner-trial/);
 });
