@@ -52,25 +52,12 @@ function draw(){
   const top=element("div",null,"support-actions");
   top.append(button("✉ إرسال اقتراح أو شكوى",()=>{dialog.close();window.ckFeedbackOpen?.();},"btn btn-primary"),button("تحديث الردود",()=>refreshInbox({render:true})));
   panel.append(top);
-  if(!rows.length)panel.append(element("p","لا توجد محادثات بعد. أرسل رأياً جديداً أو استرجع محادثة سابقة.","support-hint"));
+  if(!rows.length)panel.append(element("p","لا توجد محادثات بعد. أرسل اقتراحاً أو شكوى جديدة.","support-hint"));
   for(const t of rows.slice().sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))){
     const b=button("",()=>{selected=t.id;generation++;draw();},"support-thread-button");
     b.append(element("strong",types[t.type]+" — "+states[t.state]+(unread(t)?" • رد جديد":"")),element("span",t.record.text.slice(0,110)),element("small",stamp(t.updatedAt)));
     panel.append(b);
   }
-  const recovery=element("details",null,"support-recovery");recovery.append(element("summary","استرجاع محادثة من جهاز آخر"));
-  const input=element("input");input.className="support-input";input.placeholder="الصق رمز الاسترجاع السري";input.autocomplete="off";input.spellcheck=false;
-  recovery.append(input,button("استرجاع",async()=>{
-    if(busy)return;const [id,secret,...rest]=input.value.trim().split(".");
-    if(rest.length||!validKey({id,secret})){notice("رمز الاسترجاع غير صالح.");return;}
-    busy=true;
-    try{
-      const j=await api({action:"inbox",keys:[{id,secret}]});const t=j.records?.[0];if(!t)throw Error("المحادثة غير متاحة");
-      if(!getKey(id)){if(keys.length>=50)throw Error("احذف محادثة من جهازك بعد حفظ رمزها أولاً.");saveKeys([...keys,{id,secret,read:0}]);}
-      rows=[...rows.filter(r=>r.id!==id),t];selected=id;notice("");draw();
-    }catch(e){notice(e.message);}finally{busy=false;}
-  }));
-  panel.append(recovery);
 }
 function messageBubble(role,text,time){
   const el=element("div",null,"support-message "+(role==="admin"?"support-admin-message":"support-visitor-message"));
@@ -108,12 +95,6 @@ function drawThread(t){
   panel.append(push);
   if(demo)panel.append(button("🔔 اختبار إشعار حقيقي على هذا الجهاز",testPreviewPush));
   if(!demo&&(!("PushManager" in window)||!("Notification" in window)))panel.append(element("p","قد تحتاج إلى إضافة الموقع إلى الشاشة الرئيسية على آيفون. يمكنك متابعة الردود هنا دون إشعارات.","support-hint"));
-  const details=element("details",null,"support-recovery");details.append(element("summary","رمز الاسترجاع — احتفظ به سراً"));
-  const code=element("textarea");code.className="support-input";code.readOnly=true;code.rows=3;code.dir="ltr";code.value=t.id+"."+k.secret;
-  details.append(element("p","من يملك هذا الرمز يمكنه قراءة المحادثة والرد عليها. لا تشاركه مع الآخرين.","support-hint"),code,button("نسخ الرمز",async()=>{try{await navigator.clipboard.writeText(code.value);notice("تم نسخ الرمز.");}catch{code.select();notice("انسخ الرمز يدوياً.");}}),button("إزالة المحادثة من هذا الجهاز",()=>{
-    if(confirm("هل حفظت رمز الاسترجاع؟ لن تتمكن من فتح المحادثة مجدداً بدونه.")){try{saveKeys(keys.filter(x=>x.id!==t.id));rows=rows.filter(x=>x.id!==t.id);selected="";draw();}catch{notice("تعذر تحديث التخزين المحلي.");}}
-  }));
-  panel.append(details);
 }
 async function preparePush(){
   if(!enabled||!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))return;
