@@ -2,7 +2,7 @@ import {api,demo,types,states,stamp,randomSecret,validKey,element,button} from "
 const $=id=>document.getElementById(id);
 const storageKey="ck_support_keys_v1",dialog=$("supportDialog"),badge=$("supportUnread"),panel=$("supportContent"),status=$("supportStatus");
 let enabled=false,rows=[],selected="",generation=0,busy=false,worker=null,publicKey=null,loading=null,lastSynced=0,syncFailed=false,configLoading=null;
-const inboxBtn=$("supportInboxBtn");
+const inboxBtn=$("supportInboxBtn"),feedbackBtn=$("generalFeedbackBtn"),feedbackSlot=$("feedbackDockSlot");
 let keys=[];
 function readKeys(){try{keys=JSON.parse(localStorage.getItem(storageKey)||"[]").filter(validKey).slice(0,50);}catch{}}
 readKeys();
@@ -18,7 +18,18 @@ function renderBadge(){
 }
 function notice(text){status.textContent=text||"";}
 function setEnabled(value){
-  enabled=value===true;inboxBtn.hidden=!enabled;inboxBtn.closest(".bar")?.classList.toggle("support-inbox-active",enabled);renderBadge();
+  enabled=value===true;
+  const bar=inboxBtn.closest(".bar");
+  if(enabled&&bar){
+    if(feedbackBtn.parentElement!==bar)bar.insertBefore(feedbackBtn,inboxBtn);
+    feedbackSlot.hidden=true;
+  }else{
+    if(feedbackBtn.parentElement!==feedbackSlot)feedbackSlot.append(feedbackBtn);
+    feedbackSlot.hidden=false;
+  }
+  inboxBtn.hidden=!enabled;
+  bar?.classList.toggle("support-inbox-active",enabled);
+  renderBadge();
   if(!enabled&&dialog.open)dialog.close();
 }
 async function refreshConfig(){
