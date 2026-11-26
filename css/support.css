@@ -36,13 +36,24 @@
 #supportInboxBtn .support-inbox-label{font-size:10px;white-space:nowrap}
 #supportInboxBtn .support-unread{position:absolute;top:-4px;inset-inline-end:-4px;min-width:18px;height:18px;font-size:10px;color:var(--ink,#1b2333);padding-inline:3px}
 #supportInboxBtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* The original button is moved, not cloned; disabled mode keeps the old dock. */
+#feedbackDockSlot[hidden]{display:none!important}
+#feedbackDockSlot .feedback-entry-label{font-size:inherit;line-height:inherit}
+.bar.support-inbox-active #generalFeedbackBtn{position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;width:60px;height:44px;min-height:44px;flex-shrink:0;padding:3px 2px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--brand);box-shadow:none;white-space:normal}
+.bar.support-inbox-active #generalFeedbackBtn:hover{border-color:var(--brand)}
+.bar.support-inbox-active #generalFeedbackBtn .feedback-entry-icon{font-size:17px;line-height:1}
+.bar.support-inbox-active #generalFeedbackBtn .feedback-entry-label{font-size:10px;line-height:1.1;text-align:center}
 @media(max-width:767px){
-  .bar.support-inbox-active{grid-template-columns:minmax(0,1fr) 44px 44px 44px}
-  .bar.support-inbox-active #supportInboxBtn{grid-column:2;grid-row:1}
-  .bar.support-inbox-active #cartBtn{grid-column:3;grid-row:1}
-  .bar.support-inbox-active #themeBtn{grid-column:4;grid-row:1}
+  .bar.support-inbox-active{grid-template-columns:minmax(0,1fr) 48px 44px 44px 44px;gap:6px}
+  .bar.support-inbox-active .logo{font-size:16px;gap:4px}
+  .bar.support-inbox-active #generalFeedbackBtn{grid-column:2;grid-row:1;width:48px}
+  .bar.support-inbox-active #generalFeedbackBtn .feedback-entry-label{max-width:44px;font-size:9px;line-height:1.05}
+  .bar.support-inbox-active #supportInboxBtn{grid-column:3;grid-row:1}
+  .bar.support-inbox-active #cartBtn{grid-column:4;grid-row:1}
+  .bar.support-inbox-active #themeBtn{grid-column:5;grid-row:1}
 }
-@media(max-width:359px){.bar.support-inbox-active{gap:6px}.bar.support-inbox-active .logo{font-size:15px;gap:4px}}
+@media(max-width:359px){.bar.support-inbox-active{gap:4px}.bar.support-inbox-active .logo{font-size:14px;gap:3px}.bar.support-inbox-active .logo img{width:28px;height:28px}}
 
 .support-sync-status{font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
 .support-sync-status button{font:inherit;border:0;background:transparent;color:var(--brand);text-decoration:underline;cursor:pointer;min-height:44px;padding-inline:4px}
