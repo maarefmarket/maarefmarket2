@@ -69,3 +69,6 @@
 .admin-reply-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
 .admin-reply-head .btn{min-width:44px;min-height:44px;font-size:22px}
 #supportReplyDialog #supportAdminDetail{padding:0;border:0}
+
+.admin-feedback-bell[hidden]{display:none!important}
+.admin-feedback-bell{color:var(--brand);white-space:nowrap}
