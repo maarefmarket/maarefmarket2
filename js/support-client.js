@@ -11,17 +11,19 @@ export function element(tag,text,cls){
 export function button(text,fn,cls="btn btn-outline"){
   const b=element("button",text,cls);b.type="button";b.addEventListener("click",fn);return b;
 }
-export async function api(body,headers={},signal){
+export async function api(body,headers={},signal,timeout=15000){
   if(demo)return demoAPI(body);
   const ctrl=new AbortController(),abort=()=>ctrl.abort();
   if(signal?.aborted)throw Error("أُلغيت العملية");
   signal?.addEventListener("abort",abort,{once:true});
-  const timer=setTimeout(abort,15000);
+  let rejectAbort;
+  const cancelled=new Promise((_,reject)=>{rejectAbort=()=>reject(Error("انتهت مهلة الاتصال أو أُلغيت العملية"));ctrl.signal.addEventListener("abort",rejectAbort,{once:true});});
+  const timer=setTimeout(abort,timeout);
   try{
-    const res=await fetch("/api/support",body?{method:"POST",headers:{"Content-Type":"application/json",...headers},body:JSON.stringify(body),signal:ctrl.signal,cache:"no-store"}:{cache:"no-store",signal:ctrl.signal});
-    const j=await res.json();if(!res.ok){const e=Error(j.error||"تعذر الاتصال");e.code=j.code;e.status=res.status;throw e;}return j;
+    return await Promise.race([(async()=>{const res=await fetch("/api/support",body?{method:"POST",headers:{"Content-Type":"application/json",...headers},body:JSON.stringify(body),signal:ctrl.signal,cache:"no-store"}:{cache:"no-store",signal:ctrl.signal});
+    const j=await res.json();if(!res.ok){const e=Error(j.error||"تعذر الاتصال");e.code=j.code;e.status=res.status;throw e;}return j;})(),cancelled]);
   }catch(e){if(ctrl.signal.aborted)throw Error("انتهت مهلة الاتصال أو أُلغيت العملية");throw e;}
-  finally{clearTimeout(timer);signal?.removeEventListener("abort",abort);}
+  finally{clearTimeout(timer);signal?.removeEventListener("abort",abort);ctrl.signal.removeEventListener("abort",rejectAbort);}
 }
 // Fictional preview only, isolated to this browser and preview origin.
 // Production never invokes this function; no push or network writes.
