@@ -11,6 +11,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700&family=Cairo:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/support.css">
+<link rel="manifest" href="support.webmanifest">
 </head>
 <body>
 
@@ -40,7 +42,7 @@
 </main>
 
 <div id="shopDock" class="shop-dock" hidden>
-  <div class="feedback-float-row"><button type="button" id="generalFeedbackBtn" class="general-feedback-btn" aria-haspopup="dialog" aria-controls="feedbackDialog" disabled><span aria-hidden="true">💬</span> رأيك يهمنا</button></div>
+  <div class="feedback-float-row"><button type="button" id="generalFeedbackBtn" class="general-feedback-btn" aria-haspopup="dialog" aria-controls="feedbackDialog" disabled><span aria-hidden="true">💬</span> رأيك يهمنا <b id="supportUnread" class="support-unread" hidden></b></button></div>
   <div id="cartSummary" class="cart-summary" hidden>
     <div class="summary-info"><strong id="summaryCount"></strong><span id="summaryTotal" dir="auto"></span></div>
     <button class="btn btn-outline" type="button" data-nav="cart">السلة</button>
@@ -76,6 +78,7 @@
     <div class="feedback-head"><span aria-hidden="true">💬</span><h2 id="feedbackTitle">رأيك يساعدنا على التطوير</h2><button type="button" id="feedbackClose" class="feedback-close" aria-label="إغلاق والعودة لتعديل الطلب" title="العودة لتعديل الطلب">×</button></div>
     <p>هل واجهتك مشكلة أثناء تصفح المتجر؟ هل لديك اقتراح لتحسينه؟</p>
     <p class="feedback-privacy">رأيك اختياري ومجهول الاسم.</p>
+    <div id="supportTypeRow" hidden><label class="label" for="supportType">نوع الرسالة</label><select id="supportType" class="support-input"><option value="suggestion">اقتراح</option><option value="complaint">شكوى</option><option value="question">استفسار</option></select></div>
     <label class="label" for="feedbackText">ملاحظتك أو اقتراحك</label>
     <textarea class="field" id="feedbackText" rows="4" maxlength="1500" placeholder="اكتب رأيك هنا..."></textarea>
     <div id="feedbackError" class="err-msg" role="status" aria-live="polite"></div>
@@ -85,6 +88,8 @@
     </div>
   </form>
 </dialog>
+<dialog id="supportDialog" class="feedback-dialog" aria-labelledby="supportTitle"><div class="feedback-head"><span aria-hidden="true">💬</span><h2 id="supportTitle">رأيك يهمنا — رسائلي</h2><button id="supportClose" type="button" class="feedback-close" aria-label="إغلاق">×</button></div><p class="feedback-privacy">مراسلات دون تسجيل اسم أو هاتف. احتفظ برمز الاسترجاع سراً.</p><div id="supportStatus" role="status" aria-live="polite"></div><div id="supportContent" class="support-content"></div></dialog>
 <script type="module" src="js/store.js"></script>
+<script type="module" src="js/support.js"></script>
 </body>
 </html>
