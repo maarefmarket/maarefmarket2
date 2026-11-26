@@ -14,10 +14,11 @@ function getKey(id){return keys.find(k=>k.id===id);}
 function unread(t){return t.messages.filter(m=>m.role==="admin").length>(getKey(t.id)?.read||0);}
 function renderBadge(){
   const n=rows.filter(unread).length;badge.hidden=!enabled||!n;badge.textContent=n;
+  inboxBtn.setAttribute("aria-label",n?"رسائلي، "+n+" محادثات فيها ردود جديدة":"رسائلي");
 }
 function notice(text){status.textContent=text||"";}
 function setEnabled(value){
-  enabled=value===true;inboxBtn.hidden=!enabled;renderBadge();
+  enabled=value===true;inboxBtn.hidden=!enabled;inboxBtn.closest(".bar")?.classList.toggle("support-inbox-active",enabled);renderBadge();
   if(!enabled&&dialog.open)dialog.close();
 }
 async function refreshConfig(){
