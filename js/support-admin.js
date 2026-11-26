@@ -1,6 +1,6 @@
 import {api,demo,types,states,stamp,element,button} from "./support-client.js";
 const $=id=>document.getElementById(id),root=$("supportAdmin"),list=$("supportAdminList"),detail=$("supportAdminDetail"),status=$("supportAdminStatus");
-let rows=[],cursor=null,selected="",enabled=false,busy=false,seq=0,openedThread=null;
+let rows=[],cursor=null,selected="",enabled=false,busy=false,listLoading=false,seq=0,openedThread=null;
 const replyDialog=$("supportReplyDialog"),replyStatus=$("supportReplyStatus");
 const headers=()=>window.ckSupportAdminAuth?.()||{};
 const request=b=>api(b,headers());
@@ -8,7 +8,7 @@ const note=s=>{status.textContent=s||"";if(replyDialog.open)replyStatus.textCont
 function month(){const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Damascus",year:"numeric",month:"2-digit"}).formatToParts(new Date());return parts.find(p=>p.type==="year").value+"-"+parts.find(p=>p.type==="month").value;}
 function showConfig(){ $("supportEnabled").checked=enabled;$("supportMode").textContent=enabled?"النظام مفعّل":"النظام متوقف — الواجهة القديمة تعمل كما كانت"; }
 async function refresh(append=false){
-  if(busy)return;busy=true;const g=++seq;
+  if(busy||listLoading||replyDialog.open)return;listLoading=true;const g=++seq;
   $("supportReload").disabled=true;
   try{
     const cfg=await request({action:"adminConfig"});if(g!==seq)return;
@@ -18,7 +18,7 @@ async function refresh(append=false){
     $("supportAdminCount").textContent="عدد محادثات الشهر: "+j.total+" · المعروض: "+rows.length;
     $("supportMore").hidden=!cursor;drawList();if(!replyDialog.open)drawDetail();note(demo?"معاينة محلية — لا تُرسل إشعارات حقيقية.":"");
   }catch(e){if(g===seq)note(e.status===401?"انتهت الجلسة، أعد تسجيل الدخول.":e.message);}
-  finally{if(g===seq){busy=false;$("supportReload").disabled=false;}}
+  finally{listLoading=false;$("supportReload").disabled=false;}
 }
 function drawList(){
   const counts=$("supportCounts");counts.replaceChildren();
@@ -88,5 +88,5 @@ $("supportEnabled").addEventListener("change",async e=>{
 $("supportReplyClose").addEventListener("click",()=>{if(!busy)replyDialog.close();});
 replyDialog.addEventListener("cancel",e=>{if(busy)e.preventDefault();});
 replyDialog.addEventListener("close",()=>{openedThread=null;selected="";replyStatus.textContent="";detail.replaceChildren();});
-window.ckSupportAdmin={refresh,openReply,clear(){seq++;rows=[];cursor=null;selected="";openedThread=null;enabled=false;busy=false;if(replyDialog.open)replyDialog.close();list.replaceChildren();detail.replaceChildren();$("supportCounts").replaceChildren();note("");showConfig();$("supportReload").disabled=false;$("supportEnabled").disabled=false;}};
+window.ckSupportAdmin={refresh,openReply,clear(){seq++;rows=[];cursor=null;selected="";openedThread=null;enabled=false;busy=false;listLoading=false;if(replyDialog.open)replyDialog.close();list.replaceChildren();detail.replaceChildren();$("supportCounts").replaceChildren();note("");showConfig();$("supportReload").disabled=false;$("supportEnabled").disabled=false;}};
 if(demo)root.hidden=false;
