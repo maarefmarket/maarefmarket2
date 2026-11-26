@@ -54,7 +54,7 @@ export default async(req,context)=>{
         let replyable=null;try{replyable=!!(await support.get("threads/"+id+".json",{type:"json"}));}catch{}
         return {...record,id,replyable};
       }))).filter(Boolean);
-      return json({records,month,total:keys.length,nextCursor:eligible.length>PAGE?page.at(-1):null},200,cors);
+      return json({records,month,total:keys.length,latest:keys[0]||"",nextCursor:eligible.length>PAGE?page.at(-1):null},200,cors);
     }catch{console.error("Feedback list unavailable");return json({error:"تعذر تحميل سجل الآراء"},503,cors);}
   }
   if(req.method!=="POST")return json({error:"Method not allowed"},405,cors);
