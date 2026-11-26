@@ -388,7 +388,7 @@ function cancelFeedback(){
   $("feedbackText").disabled=false;$("feedbackError").textContent="";
 }
 function showOrderFeedback(msg,items,notes){return showFeedback("order",msg,items,notes);}
-function showGeneralFeedback(){if(window.ckSupport?.enabled&&window.ckSupport.open())return true;return showFeedback("general","",[],"");}
+function showGeneralFeedback(){return showFeedback("general","",[],"");}
 window.ckFeedbackOpen=()=>showFeedback("general","",[],"");
 function showFeedback(mode,msg,items,notes){
   if(feedbackPending||maintenance||!storeReady)return false;
