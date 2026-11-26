@@ -46,12 +46,12 @@ export default async(req,context)=>{
       }
       const eligible=cursor?keys.filter(k=>k<cursor):keys;
       const page=eligible.slice(0,PAGE);
-      const support=getStore({name:"campuskart-support-v1",consistency:"strong"});
+      let support;try{support=getStore({name:"campuskart-support-v1",consistency:"strong"});}catch{}
       const records=(await Promise.all(page.map(async k=>{
         const record=await store.get(k,{type:"json"});if(!record)return null;
         const id=k.slice(prefix.length,-5);
         // Old records use the identical ID as their support mirror, if one exists.
-        let replyable=null;try{replyable=!!(await support.get("threads/"+id+".json",{type:"json"}));}catch{}
+        let replyable=null;try{if(support)replyable=!!(await support.get("threads/"+id+".json",{type:"json"}));}catch{}
         return {...record,id,replyable};
       }))).filter(Boolean);
       return json({records,month,total:keys.length,latest:keys[0]||"",nextCursor:eligible.length>PAGE?page.at(-1):null},200,cors);
