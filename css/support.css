@@ -19,9 +19,6 @@
 .support-message.support-admin-message,.support-admin-message.staff{background:var(--brand-soft);border-color:var(--brand)}
 .support-visitor-message{margin-inline-end:24px}
 .support-messages .support-admin-message{margin-inline-start:24px}
-.support-recovery{border:1px solid var(--line);border-radius:10px;padding:10px;overflow-wrap:anywhere}
-.support-recovery summary{cursor:pointer;color:var(--brand);font-weight:700}
-.support-recovery .btn,.support-recovery .support-input{margin-top:8px}
 .support-content .btn{min-height:44px;white-space:normal}
 .support-admin-grid{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);margin-top:12px}
 #supportAdminDetail{border:1px solid var(--line);border-radius:12px;padding:12px;align-content:start}
