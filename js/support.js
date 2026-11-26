@@ -3,7 +3,8 @@ const $=id=>document.getElementById(id);
 const storageKey="ck_support_keys_v1",dialog=$("supportDialog"),badge=$("supportUnread"),panel=$("supportContent"),status=$("supportStatus");
 let enabled=false,rows=[],selected="",generation=0,busy=false,worker=null,publicKey=null,loading=false;
 let keys=[];
-try{keys=JSON.parse(localStorage.getItem(storageKey)||"[]").filter(validKey).slice(0,50);}catch{}
+function readKeys(){try{keys=JSON.parse(localStorage.getItem(storageKey)||"[]").filter(validKey).slice(0,50);}catch{}}
+readKeys();
 function saveKeys(next){
   localStorage.setItem(storageKey,JSON.stringify(next));
   keys=next;
@@ -28,11 +29,15 @@ async function refreshInbox({render=false}={}){
     const j=await api({action:"inbox",keys:keys.map(({id,secret})=>({id,secret}))});
     if(!enabled)return;
     rows=j.records||[];renderBadge();
-    if(render&&dialog.open&&g===generation&&!busy){draw();}
+    if(render&&dialog.open&&g===generation&&!busy){
+      // Never erase a visitor draft just because a background poll completed.
+      const draft=$("supportFollowup");if(!draft?.value.trim())draw();
+    }
   }catch(e){if(e.code==="DISABLED")setEnabled(false);else if(dialog.open)notice("تعذر تحديث الردود؛ أعد المحاولة.");}
   finally{loading=false;}
 }
 function openHub(id=""){
+  readKeys();
   if(!enabled||$("feedbackDialog").open)return false;
   selected=id;generation++;busy=false;notice(demo?"معاينة محلية: بيانات افتراضية، لا إشعارات حقيقية.":"");
   if(!dialog.open)dialog.showModal();
@@ -79,7 +84,7 @@ function markRead(t){
 }
 function drawThread(t){
   markRead(t);
-  panel.append(button("‹ العودة إلى رسائلي",()=>{selected="";generation++;draw();}));
+  const nav=element("div",null,"support-actions");nav.append(button("‹ العودة إلى رسائلي",()=>{selected="";generation++;draw();}),button("تحديث المحادثة",()=>refreshInbox({render:true})));panel.append(nav);
   panel.append(element("h3",types[t.type]+" · "+states[t.state]));
   const messages=element("div",null,"support-messages");messages.append(messageBubble("visitor",t.record.text,t.record.timestamp));
   for(const m of t.messages)messages.append(messageBubble(m.role,m.text,m.timestamp));
@@ -87,7 +92,7 @@ function drawThread(t){
   const k=getKey(t.id);
   if(!k)return;
   if(t.state!=="resolved"){
-    const field=element("textarea");field.className="support-input";field.rows=3;field.maxLength=1500;field.placeholder="اكتب متابعة...";
+    const field=element("textarea");field.id="supportFollowup";field.className="support-input";field.rows=3;field.maxLength=1500;field.placeholder="اكتب متابعة...";
     const send=button("إرسال المتابعة",async()=>{
       if(busy||!field.value.trim())return;
       const g=generation;busy=true;send.disabled=true;
@@ -140,6 +145,7 @@ window.ckSupport={
   decorate(pending){$("supportTypeRow").hidden=!enabled;$("supportType").value="suggestion";pending.supportEnabled=enabled;},
   async send(pending,body,legacy){
     if(!pending.supportEnabled||!enabled)return legacy();
+    readKeys();
     let k=pending.supportKey;
     if(!k){
       k={id:body.id,secret:randomSecret(),read:0};
@@ -147,12 +153,15 @@ window.ckSupport={
       catch{pending.supportUnavailable=true;return legacy();}
     }
     try{
-      const j=await api({...body,action:"create",type:$("supportType").value,secret:k.secret},{},pending.controller.signal);
+      const j=await api({...body,action:"create",type:$("supportType").value,secret:k.secret},{},pending.controller.signal,7000);
       if(pending.controller.signal.aborted)throw Error("أُلغيت العملية");
       pending.supportThread=j.thread;rows=[...rows.filter(r=>r.id!==j.thread.id),j.thread];renderBadge();
       return {res:{ok:true},data:{ok:true,preview:demo}};
     }catch(e){
+      if(pending.controller.signal.aborted)throw e;
       if(e.code==="DISABLED"){setEnabled(false);try{saveKeys(keys.filter(x=>x.id!==k.id));}catch{}return legacy();}
+      // The legacy endpoint uses the identical feedback ID, so a timeout cannot duplicate the original opinion.
+      if(!e.status||e.status>=500){pending.supportUnavailable=true;return legacy();}
       throw e;
     }
   },
@@ -163,9 +172,10 @@ $("supportClose").addEventListener("click",()=>dialog.close());
 dialog.addEventListener("close",()=>{generation++;selected="";busy=false;});
 async function tick(){
   if(document.hidden)return;
-  if(await refreshConfig()&&keys.length)await refreshInbox({render:dialog.open&&!selected});
+  readKeys();if(await refreshConfig()&&keys.length)await refreshInbox({render:dialog.open});
 }
 window.addEventListener("focus",tick);
+window.addEventListener("storage",e=>{if(e.key===storageKey||demo&&e.key?.startsWith("ck_support_demo_"))tick();});
 navigator.serviceWorker?.addEventListener("message",async e=>{if(e.data?.type==="support-reply"&&await refreshConfig())openHub();});
 setInterval(tick,60000);
 refreshConfig().then(async ok=>{if(!ok)return;if(keys.length)await refreshInbox();if(new URLSearchParams(location.search).has("support"))openHub();});
