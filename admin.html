@@ -241,7 +241,7 @@
         <p class="hint">إيقافه يعيد نافذة الاقتراحات القديمة دون حذف المحادثات. يُحفظ هذا الخيار مستقلاً عن إعدادات المتجر.</p>
         <div id="supportAdminStatus" role="status" class="hint"></div>
         <div class="row cols-3 mt"><label>شهر المحادثات<input id="supportMonth" class="field" type="month"></label><label>البحث في الرسائل المحمّلة<input id="supportSearch" class="field" type="search" placeholder="بحث"></label><label>الحالة<select id="supportFilter" class="field"><option value="">الكل</option><option value="new">بانتظار الرد</option><option value="answered">تم الرد</option><option value="resolved">تم الحل</option></select></label><label>النوع<select id="supportFilterType" class="field"><option value="">الكل</option><option value="suggestion">اقتراح</option><option value="complaint">شكوى</option><option value="question">استفسار</option></select></label><button id="supportReload" class="btn btn-primary" type="button">تحديث المراسلات</button></div>
-        <p id="supportAdminCount" class="hint"></p>
+        <p id="supportAdminCount" class="hint"></p><div class="support-counts" id="supportCounts" aria-label="حالات المحادثات المحمّلة"></div>
         <div class="support-admin-grid"><div><div id="supportAdminList" class="support-content"></div><button type="button" id="supportMore" class="btn btn-ghost mt" hidden>عرض المزيد</button></div><div id="supportAdminDetail" class="support-content"></div></div>
       </div>
       <div class="card">
