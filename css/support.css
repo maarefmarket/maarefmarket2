@@ -1,0 +1,59 @@
+
+/* Scoped support styles, reuse all existing theme tokens. */
+.support-unread{min-width:22px;height:22px;padding-inline:5px;display:grid;place-items:center;background:var(--accent);color:var(--ink,#1b2333);font-size:12px;border-radius:99px}
+#supportDialog{width:min(94vw,560px)}
+.support-content{display:grid;gap:10px;min-width:0}
+.support-actions{display:grid;gap:8px}
+.support-input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font:inherit;min-height:44px}
+.support-input:focus{outline:2px solid var(--accent)}
+.support-hint,#supportStatus{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+#supportStatus:not(:empty){padding:8px;margin-bottom:8px;background:var(--elevated);border-radius:8px}
+.support-thread-button,.support-admin-thread{display:grid;gap:5px;text-align:start;min-width:0;width:100%;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;cursor:pointer}
+.support-thread-button strong,.support-admin-thread strong{color:var(--brand)}
+.support-thread-button span,.support-admin-thread span{overflow-wrap:anywhere}
+.support-thread-button small,.support-admin-thread small,.support-message small,.support-admin-message small{color:var(--muted);font-size:11px}
+.support-admin-thread.selected{border-color:var(--brand);background:var(--brand-soft)}
+.support-messages{display:grid;gap:8px;max-height:44dvh;overflow:auto;padding:4px}
+.support-message,.support-admin-message{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--elevated);overflow-wrap:anywhere;white-space:pre-wrap;min-width:0}
+.support-message p,.support-admin-message p{margin:6px 0 0;white-space:pre-wrap}
+.support-message.support-admin-message,.support-admin-message.staff{background:var(--brand-soft);border-color:var(--brand)}
+.support-visitor-message{margin-inline-end:24px}
+.support-messages .support-admin-message{margin-inline-start:24px}
+.support-content .btn{min-height:44px;white-space:normal}
+.support-admin-grid{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);margin-top:12px}
+#supportAdminDetail{border:1px solid var(--line);border-radius:12px;padding:12px;align-content:start}
+@media(min-width:900px){.support-admin-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}}
+
+.support-counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.support-count{display:grid;gap:4px;padding:10px;border:1px solid var(--line);background:var(--elevated);border-radius:10px;text-align:center;overflow-wrap:anywhere}
+.support-count strong{color:var(--brand);font-size:20px}
+#supportAdmin .btn-outline{background:var(--elevated);color:var(--fg);border:1px solid var(--line)}
+
+/* Messages live in the header; reserve a column only when enabled. */
+#supportInboxBtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;color:var(--brand);font-size:10px;line-height:1.1}
+#supportInboxBtn[hidden]{display:none!important}
+#supportInboxBtn svg{flex-shrink:0}
+#supportInboxBtn .support-inbox-label{font-size:10px;white-space:nowrap}
+#supportInboxBtn .support-unread{position:absolute;top:-4px;inset-inline-end:-4px;min-width:18px;height:18px;font-size:10px;color:var(--ink,#1b2333);padding-inline:3px}
+#supportInboxBtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* The original button is moved, not cloned; disabled mode keeps the old dock. */
+#feedbackDockSlot[hidden]{display:none!important}
+#feedbackDockSlot .feedback-entry-label{font-size:inherit;line-height:inherit}
+.bar.support-inbox-active #generalFeedbackBtn{position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:2px;width:60px;height:44px;min-height:44px;flex-shrink:0;padding:3px 2px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--brand);box-shadow:none;white-space:normal}
+.bar.support-inbox-active #generalFeedbackBtn:hover{border-color:var(--brand)}
+.bar.support-inbox-active #generalFeedbackBtn .feedback-entry-icon{font-size:17px;line-height:1}
+.bar.support-inbox-active #generalFeedbackBtn .feedback-entry-label{font-size:10px;line-height:1.1;text-align:center}
+@media(max-width:767px){
+  .bar.support-inbox-active{grid-template-columns:minmax(0,1fr) 48px 44px 44px 44px;gap:6px}
+  .bar.support-inbox-active .logo{font-size:16px;gap:4px}
+  .bar.support-inbox-active #generalFeedbackBtn{grid-column:2;grid-row:1;width:48px}
+  .bar.support-inbox-active #generalFeedbackBtn .feedback-entry-label{max-width:44px;font-size:9px;line-height:1.05}
+  .bar.support-inbox-active #supportInboxBtn{grid-column:3;grid-row:1}
+  .bar.support-inbox-active #cartBtn{grid-column:4;grid-row:1}
+  .bar.support-inbox-active #themeBtn{grid-column:5;grid-row:1}
+}
+@media(max-width:359px){.bar.support-inbox-active{gap:4px}.bar.support-inbox-active .logo{font-size:14px;gap:3px}.bar.support-inbox-active .logo img{width:28px;height:28px}}
+
+.support-sync-status{font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.support-sync-status button{font:inherit;border:0;background:transparent;color:var(--brand);text-decoration:underline;cursor:pointer;min-height:44px;padding-inline:4px}

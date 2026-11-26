@@ -63,3 +63,10 @@
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=604800"
+
+# The worker handles notifications only; avoid stale worker code on rollback.
+[[headers]]
+  for = "/support-sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Service-Worker-Allowed = "/"

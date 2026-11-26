@@ -74,7 +74,7 @@ async function loadData() {
 
 function renderMaintenance(message){
   maintenance=true;storeReady=false;stopBanner();
-  cancelFeedback();
+  cancelFeedback();window.ckSupport?.cancel();
   if(imageViewer.open){viewerResume=false;imageViewer.close();}
   document.documentElement.classList.add("maintenance-mode");
   if($("categoryDialog")?.open)$("categoryDialog").close();
@@ -389,6 +389,7 @@ function cancelFeedback(){
 }
 function showOrderFeedback(msg,items,notes){return showFeedback("order",msg,items,notes);}
 function showGeneralFeedback(){return showFeedback("general","",[],"");}
+window.ckFeedbackOpen=()=>showFeedback("general","",[],"");
 function showFeedback(mode,msg,items,notes){
   if(feedbackPending||maintenance||!storeReady)return false;
   const dialog=$("feedbackDialog");
@@ -402,6 +403,7 @@ function showFeedback(mode,msg,items,notes){
   $("feedbackSkip").textContent=general?"إلغاء":"تخطي والطلب عبر واتساب";
   const close=$("feedbackClose");close.setAttribute?.("aria-label",general?"إغلاق والعودة للمتجر":"إغلاق والعودة لتعديل الطلب");close.title=general?"العودة للمتجر":"العودة لتعديل الطلب";
   $("feedbackSend").disabled=false;$("feedbackSkip").disabled=false;
+  try{window.ckSupport?.decorate(feedbackPending);}catch{}
   try{dialog.showModal();return true;}catch{cancelFeedback();toast("تعذر فتح نافذة الطلب، حاول مجدداً","err");return false;}
 }
 async function finishFeedback(send){
@@ -420,13 +422,15 @@ async function finishFeedback(send){
       }
       if(!isCurrentFeedback(pending))return;
       error.textContent="جاري حفظ رأيك…";
-      const {res,data:j}=await requestJSON("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:pending.id,text:value,items:pending.items,kind:general?"general":"order"})},7000,pending.controller.signal);
+      const body={id:pending.id,text:value,items:pending.items,kind:general?"general":"order"};
+      const legacy=()=>requestJSON("/api/feedback",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)},7000,pending.controller.signal);
+      const {res,data:j}=await (window.ckSupport?.send?window.ckSupport.send(pending,body,legacy):legacy());
       if(!isCurrentFeedback(pending))return;
       if(!res.ok||!j.ok)throw Error(j.error||"تعذر حفظ الرأي. يمكنك إعادة المحاولة.");
       pending.saved=true;error.textContent=j.preview?"معاينة: لم يُحفظ رأي حقيقي.":"شكراً لك، تم حفظ رأيك.";
     }
     if(!isCurrentFeedback(pending))return;
-    if(general){const message=error.textContent;cancelFeedback();generalFeedbackDraft="";toast(message);return;}
+    if(general){const message=error.textContent;cancelFeedback();generalFeedbackDraft="";toast(pending.supportUnavailable?"تم حفظ رأيك؛ المتابعة غير متاحة على هذا الجهاز.":message);try{window.ckSupport?.afterGeneral(pending);}catch{}return;}
     if(await openWhatsapp(pending.msg,pending.items,pending.notes,undefined,pending)){
       if(isCurrentFeedback(pending)){feedbackPending=null;unsentFeedbackDraft="";$("feedbackDialog").close();}
     }else if(isCurrentFeedback(pending))error.textContent=pending.saved?"تم حفظ رأيك، تعذر فتح الطلب. حاول المتابعة مجدداً.":"تعذر فتح الطلب حالياً. أعد المحاولة أو ارجع لتعديل الطلب.";
@@ -493,7 +497,10 @@ function renderBanner(step=0) {
   if (!box || !b) return;
   const src = safeSrc(b.image);
   const link = safeSrc(b.link);
-  const inner = `${src ? `<img src="${src}" alt="">` : ""}<div class="ov"></div><div class="txt">${b.eyebrow ? `<div class="ey">${esc(b.eyebrow)}</div>` : ""}${b.title ? `<h2>${esc(b.title)}</h2>` : ""}</div>`;
+  // Approved natural-height layout: never crop the source advertisement.
+  if(src)box.setAttribute("data-banner-fit","adaptive");else box.removeAttribute("data-banner-fit");
+  const caption=b.eyebrow||b.title? `<div class="txt">${b.eyebrow?`<div class="ey">${esc(b.eyebrow)}</div>`:""}${b.title?`<h2>${esc(b.title)}</h2>`:""}</div>`:"";
+  const inner = src?`<div class="banner-image-frame"><img src="${src}" alt="${esc(b.title||"إعلان المتجر")}"></div>${caption}` : `<div class="ov"></div><div class="txt">${b.eyebrow?`<div class="ey">${esc(b.eyebrow)}</div>`:""}${b.title?`<h2>${esc(b.title)}</h2>`:""}</div>`;
   box.innerHTML = `<div class="banner-slide">${inner}</div>` + (src ? `<button type="button" class="image-hit" data-image-banner="${bannerIdx}" aria-label="تكبير الإعلان"></button>` : link ? `<a href="${link}" target="_blank" rel="noopener" class="image-hit" aria-label="فتح رابط الإعلان"></a>` : "");
   document.querySelectorAll(".banner-dots button").forEach((d, i) => {
     d.classList.toggle("active", i === bannerIdx);

@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/admin.css">
+<link rel="stylesheet" href="css/support.css">
 </head>
 <body>
 
@@ -233,6 +234,16 @@
     <!-- النسخ الاحتياطي -->
     <section id="tab-feedback" class="tab-pane" style="display:none">
       <div class="section-head"><div><h2>💬 آراء الزبائن</h2><p>سجل الآراء العامة والآراء المرسلة قبل الطلب دون اسم أو رقم هاتف. تظهر المنتجات فقط مع آراء الطلبات، وليست دليلاً على إرسال الطلب في واتساب.</p></div></div>
+      <div id="supportAdmin" class="card">
+        <h3>💬 المراسلات المجهولة</h3>
+        <label class="check"><input type="checkbox" id="supportEnabled"> تشغيل نظام المراسلات والردود</label>
+        <p id="supportMode" class="hint">جاري التحقق من الإعداد...</p>
+        <p class="hint">إيقافه يعيد نافذة الاقتراحات القديمة دون حذف المحادثات. يُحفظ هذا الخيار مستقلاً عن إعدادات المتجر.</p>
+        <div id="supportAdminStatus" role="status" class="hint"></div>
+        <div class="row cols-3 mt"><label>شهر المحادثات<input id="supportMonth" class="field" type="month"></label><label>البحث في الرسائل المحمّلة<input id="supportSearch" class="field" type="search" placeholder="بحث"></label><label>الحالة<select id="supportFilter" class="field"><option value="">الكل</option><option value="new">بانتظار الرد</option><option value="answered">تم الرد</option><option value="resolved">تم الحل</option></select></label><label>النوع<select id="supportFilterType" class="field"><option value="">الكل</option><option value="suggestion">اقتراح</option><option value="complaint">شكوى</option><option value="question">استفسار</option></select></label><button id="supportReload" class="btn btn-primary" type="button">تحديث المراسلات</button></div>
+        <p id="supportAdminCount" class="hint"></p><div class="support-counts" id="supportCounts" aria-label="حالات المحادثات المحمّلة"></div>
+        <div class="support-admin-grid"><div><div id="supportAdminList" class="support-content"></div><button type="button" id="supportMore" class="btn btn-ghost mt" hidden>عرض المزيد</button></div><div id="supportAdminDetail" class="support-content"></div></div>
+      </div>
       <div class="card">
         <div class="row cols-2">
           <div><label class="label" for="feedbackMonth">شهر السجل</label><input id="feedbackMonth" class="field" type="month"></div>
@@ -410,5 +421,6 @@
 
 <div id="toast" role="status"></div>
 <script type="module" src="js/admin.js"></script>
+<script type="module" src="js/support-admin.js"></script>
 </body>
 </html>
