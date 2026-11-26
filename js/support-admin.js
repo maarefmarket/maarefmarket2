@@ -34,7 +34,7 @@ function drawList(){
   }
 }
 async function openReply(id){
-  if(busy)return;
+  if(busy){note("جاري التحميل، حاول بعد اكتماله.");return;}
   busy=true;const g=++seq;selected=id;openedThread=null;
   replyStatus.textContent="جاري فتح المحادثة…";detail.replaceChildren();
   if(!replyDialog.open)replyDialog.showModal();
@@ -56,7 +56,7 @@ function drawDetail(){
   for(const m of t.messages){const b=element("div",null,"support-admin-message"+(m.role==="admin"?" staff":""));b.append(element("small",(m.role==="admin"?"الإدارة":"الزبون — مجهول")+" · "+stamp(m.timestamp)),element("p",m.text));detail.append(b);}
   if(!enabled){detail.append(element("p","نظام المراسلات متوقف. شغّله من لوحة آراء الزبائن للرد. المحادثات محفوظة.","hint"));return;}
   if(t.state!=="resolved"){
-    const field=element("textarea");field.className="field";field.rows=3;field.maxLength=1500;field.placeholder="اكتب ردك...";
+    const field=element("textarea");field.className="field";field.rows=3;field.maxLength=1500;field.placeholder="اكتب ردك...";field.setAttribute("aria-label","نص الرد");
     const send=button("إرسال الرد والإشعار",async()=>{
       if(busy||!field.value.trim())return;busy=true;send.disabled=true;field.dataset.op=field.dataset.op||crypto.randomUUID();
       const g=seq;
@@ -64,7 +64,7 @@ function drawDetail(){
         replace(j.thread);const labels={accepted:"تم حفظ الرد وقَبِل مزوّد الإشعارات الطلب (لا يضمن وصوله).",failed:"تم حفظ الرد، تعذّر إرسال الإشعار.",expired:"تم حفظ الرد، انتهى اشتراك الإشعارات.",disabled:"تم حفظ الرد، الإشعارات متوقفة.",demo:"تم حفظ الرد التجريبي؛ الإشعار محاكى.", "not-subscribed":"تم حفظ الرد داخل الموقع، لا اشتراك بالإشعارات.","not-sent":"الرد محفوظ مسبقاً."};note(labels[j.push]||"تم حفظ الرد.");
       }catch(e){if(g===seq)note(e.message);}finally{if(g===seq)busy=false;send.disabled=false;}
     },"btn btn-primary");
-    detail.append(field,send);
+    detail.append(field,send);field.focus();
   }
   detail.append(button(t.state==="resolved"?"إعادة فتح المحادثة":"✓ تم الحل — إغلاق المحادثة",async()=>{
     if(busy||!confirm(t.state==="resolved"?"إعادة فتح المحادثة؟":"إغلاق المحادثة بعد حل المشكلة؟"))return;busy=true;const g=seq;
