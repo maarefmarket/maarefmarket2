@@ -1,7 +1,8 @@
 import {api,demo,types,states,stamp,randomSecret,validKey,element,button} from "./support-client.js";
 const $=id=>document.getElementById(id);
 const storageKey="ck_support_keys_v1",dialog=$("supportDialog"),badge=$("supportUnread"),panel=$("supportContent"),status=$("supportStatus");
-let enabled=false,rows=[],selected="",generation=0,busy=false,worker=null,publicKey=null,loading=false;
+let enabled=false,rows=[],selected="",generation=0,busy=false,worker=null,publicKey=null,loading=null,lastSynced=0,syncFailed=false,configLoading=null;
+const inboxBtn=$("supportInboxBtn");
 let keys=[];
 function readKeys(){try{keys=JSON.parse(localStorage.getItem(storageKey)||"[]").filter(validKey).slice(0,50);}catch{}}
 readKeys();
@@ -16,43 +17,78 @@ function renderBadge(){
 }
 function notice(text){status.textContent=text||"";}
 function setEnabled(value){
-  enabled=value===true;renderBadge();
+  enabled=value===true;inboxBtn.hidden=!enabled;renderBadge();
   if(!enabled&&dialog.open)dialog.close();
 }
 async function refreshConfig(){
-  try{const c=await api();setEnabled(c.enabled);return enabled;}catch{return enabled;}
+  if(!configLoading)configLoading=(async()=>{try{const c=await api();setEnabled(c.enabled);return enabled;}catch{return enabled;}finally{configLoading=null;}})();
+  return configLoading;
+}
+function drawSync(){
+  const el=$("supportSyncStatus");if(!el)return;
+  el.replaceChildren(element("span",loading?"جاري جلب الردود…":syncFailed?"تعذر الاتصال.":lastSynced?"تُحدّث الردود تلقائياً":"بانتظار تحميل الرسائل…"));
+  if(syncFailed&&!loading)el.append(button("إعادة المحاولة",()=>refreshInbox({render:true}),"support-sync-retry"));
+}
+function directThread(){
+  const unreadRows=rows.filter(unread);
+  return unreadRows.length===1?unreadRows[0].id:rows.length===1?rows[0].id:"";
 }
 async function refreshInbox({render=false}={}){
-  if(!enabled||loading)return;
-  loading=true;const g=generation;
-  try{
-    const j=await api({action:"inbox",keys:keys.map(({id,secret})=>({id,secret}))});
-    if(!enabled)return;
-    rows=j.records||[];renderBadge();
-    if(render&&dialog.open&&g===generation&&!busy){
-      // Never erase a visitor draft just because a background poll completed.
-      const draft=$("supportFollowup");if(!draft?.value.trim())draw();
-    }
-  }catch(e){if(e.code==="DISABLED")setEnabled(false);else if(dialog.open)notice("تعذر تحديث الردود؛ أعد المحاولة.");}
-  finally{loading=false;}
+  if(!enabled)return false;
+  if(!loading){
+    // Fetch only this browser's conversations, not all visitor records.
+    loading=(async()=>{
+      try{
+        readKeys();
+        const j=keys.length?await api({action:"inbox",keys:keys.map(({id,secret})=>({id,secret}))}):{records:[]};
+        if(!enabled)return false;
+        rows=j.records||[];lastSynced=Date.now();syncFailed=false;renderBadge();return true;
+      }catch(e){
+        if(e.code==="DISABLED")setEnabled(false);
+        syncFailed=true;return false;
+      }
+    })();
+  }
+  const request=loading,g=generation;
+  drawSync();
+  const ok=await request;
+  if(loading===request)loading=null;
+  if(render&&dialog.open&&g===generation&&!busy&&ok){
+    const draft=$("supportFollowup"),messageList=$("supportMessages");
+    if(selected&&draft&&(draft.value.trim()||document.activeElement===draft)&&messageList){
+      // Keep the actual input node, cursor and draft while new messages arrive.
+      const t=rows.find(x=>x.id===selected);
+      if(t){fillMessages(messageList,t);markRead(t);}
+    }else draw();
+  }
+  drawSync();return ok;
 }
-function openHub(id=""){
+function openHub(id="",autoDirect=false){
   readKeys();
-  if(!enabled||$("feedbackDialog").open)return false;
-  selected=id;generation++;busy=false;notice(demo?"معاينة محلية: بيانات افتراضية، لا إشعارات حقيقية.":"");
+  if(!enabled||$("feedbackDialog").open||document.documentElement.classList.contains("maintenance-mode"))return false;
+  if(dialog.open&&busy)return false;
+  selected=id||((autoDirect&&rows.length)?directThread():"");
+  const g=++generation;notice(demo?"معاينة محلية: بيانات افتراضية، لا إشعارات حقيقية.":"");
   if(!dialog.open)dialog.showModal();
-  draw();refreshInbox({render:true});preparePush();return true;
+  draw();
+  refreshInbox().then(ok=>{
+    if(!ok||!dialog.open||g!==generation||busy)return;
+    if(autoDirect&&!selected)selected=directThread();
+    if(!$("supportFollowup")?.value.trim())draw();
+  });
+  preparePush();return true;
 }
 function draw(){
   panel.replaceChildren();
+  const sync=element("div",null,"support-sync-status");sync.id="supportSyncStatus";sync.setAttribute("role","status");panel.append(sync);drawSync();
   if(selected){
     const t=rows.find(x=>x.id===selected);if(t){drawThread(t);return;}
     selected="";
   }
   const top=element("div",null,"support-actions");
-  top.append(button("✉ إرسال اقتراح أو شكوى",()=>{dialog.close();window.ckFeedbackOpen?.();},"btn btn-primary"),button("تحديث الردود",()=>refreshInbox({render:true})));
+  top.append(button("✉ إرسال اقتراح أو شكوى",()=>{dialog.close();window.ckFeedbackOpen?.();},"btn btn-primary"));
   panel.append(top);
-  if(!rows.length)panel.append(element("p","لا توجد محادثات بعد. أرسل اقتراحاً أو شكوى جديدة.","support-hint"));
+  if(!rows.length)panel.append(element("p",loading?"جاري تحميل رسائلك…":syncFailed?"تعذر تحميل الرسائل حالياً.":"لا توجد محادثات بعد. يمكنك إرسال اقتراح أو شكوى دون طلب أي منتج.","support-hint"));
   for(const t of rows.slice().sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))){
     const b=button("",()=>{selected=t.id;generation++;draw();},"support-thread-button");
     b.append(element("strong",types[t.type]+" — "+states[t.state]+(unread(t)?" • رد جديد":"")),element("span",t.record.text.slice(0,110)),element("small",stamp(t.updatedAt)));
@@ -63,6 +99,12 @@ function messageBubble(role,text,time){
   const el=element("div",null,"support-message "+(role==="admin"?"support-admin-message":"support-visitor-message"));
   el.append(element("small",(role==="admin"?"إدارة المتجر":"أنت — مجهول")+" · "+stamp(time)),element("p",text));return el;
 }
+function fillMessages(messages,t){
+  const atBottom=messages.scrollHeight-messages.scrollTop-messages.clientHeight<24;
+  messages.replaceChildren(messageBubble("visitor",t.record.text,t.record.timestamp));
+  for(const m of t.messages)messages.append(messageBubble(m.role,m.text,m.timestamp));
+  if(atBottom)messages.scrollTop=messages.scrollHeight;
+}
 function markRead(t){
   const k=getKey(t.id);if(!k)return;
   const read=t.messages.filter(m=>m.role==="admin").length;
@@ -71,11 +113,9 @@ function markRead(t){
 }
 function drawThread(t){
   markRead(t);
-  const nav=element("div",null,"support-actions");nav.append(button("‹ العودة إلى رسائلي",()=>{selected="";generation++;draw();}),button("تحديث المحادثة",()=>refreshInbox({render:true})));panel.append(nav);
+  const nav=element("div",null,"support-actions");nav.append(button("‹ جميع رسائلي",()=>{selected="";generation++;draw();}));panel.append(nav);
   panel.append(element("h3",types[t.type]+" · "+states[t.state]));
-  const messages=element("div",null,"support-messages");messages.append(messageBubble("visitor",t.record.text,t.record.timestamp));
-  for(const m of t.messages)messages.append(messageBubble(m.role,m.text,m.timestamp));
-  panel.append(messages);
+  const messages=element("div",null,"support-messages");messages.id="supportMessages";fillMessages(messages,t);panel.append(messages);
   const k=getKey(t.id);
   if(!k)return;
   if(t.state!=="resolved"){
@@ -171,14 +211,17 @@ window.ckSupport={
   afterGeneral(pending){if(pending.supportThread&&enabled)openHub(pending.supportThread.id);},
   cancel(){if(dialog.open)dialog.close();}
 };
+inboxBtn.addEventListener("click",()=>openHub("",true));
 $("supportClose").addEventListener("click",()=>dialog.close());
-dialog.addEventListener("close",()=>{generation++;selected="";busy=false;});
+dialog.addEventListener("close",()=>{if(dialog.open)return;generation++;selected="";});
 async function tick(){
   if(document.hidden)return;
-  readKeys();if(await refreshConfig()&&keys.length)await refreshInbox({render:dialog.open});
+  readKeys();if(await refreshConfig()&&(keys.length||dialog.open))await refreshInbox({render:dialog.open});
 }
 window.addEventListener("focus",tick);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)tick();});
 window.addEventListener("storage",e=>{if(e.key===storageKey||demo&&e.key?.startsWith("ck_support_demo_"))tick();});
-navigator.serviceWorker?.addEventListener("message",async e=>{if(e.data?.type==="support-reply"&&await refreshConfig())openHub();});
+navigator.serviceWorker?.addEventListener("message",async e=>{if(e.data?.type==="support-reply"&&await refreshConfig()){await refreshInbox();openHub("",true);}});
+setInterval(()=>{if(dialog.open&&!document.hidden&&enabled&&!busy)refreshInbox({render:true});},15000);
 setInterval(tick,60000);
-refreshConfig().then(async ok=>{if(!ok)return;if(keys.length)await refreshInbox();if(new URLSearchParams(location.search).has("support"))openHub();});
+refreshConfig().then(async ok=>{if(!ok)return;if(keys.length)await refreshInbox();if(new URLSearchParams(location.search).has("support"))openHub("",true);});
