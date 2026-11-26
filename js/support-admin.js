@@ -4,7 +4,7 @@ let rows=[],cursor=null,selected="",enabled=false,busy=false,seq=0;
 const headers=()=>window.ckSupportAdminAuth?.()||{};
 const request=b=>api(b,headers());
 const note=s=>{status.textContent=s||"";};
-function month(){return new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Damascus",year:"numeric",month:"2-digit"}).formatToParts(new Date()).filter(x=>["year","month"].includes(x.type)).map(x=>x.value).join("-");}
+function month(){const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Damascus",year:"numeric",month:"2-digit"}).formatToParts(new Date());return parts.find(p=>p.type==="year").value+"-"+parts.find(p=>p.type==="month").value;}
 function showConfig(){ $("supportEnabled").checked=enabled;$("supportMode").textContent=enabled?"النظام مفعّل":"النظام متوقف — الواجهة القديمة تعمل كما كانت"; }
 async function refresh(append=false){
   if(busy)return;busy=true;const g=++seq;
@@ -20,6 +20,8 @@ async function refresh(append=false){
   finally{if(g===seq){busy=false;$("supportReload").disabled=false;}}
 }
 function drawList(){
+  const counts=$("supportCounts");counts.replaceChildren();
+  for(const state of Object.keys(states)){const el=element("div",null,"support-count");el.append(element("small",states[state]),element("strong",String(rows.filter(t=>t.state===state).length)));counts.append(el);}
   const query=$("supportSearch").value.trim().toLowerCase(),state=$("supportFilter").value,type=$("supportFilterType").value;
   const filtered=rows.filter(t=>(!state||t.state===state)&&(!type||t.type===type)&&(!query||[t.id,t.record.text,...t.messages.map(m=>m.text)].join(" ").toLowerCase().includes(query)));
   list.replaceChildren();
@@ -69,5 +71,5 @@ $("supportEnabled").addEventListener("change",async e=>{
   try{const j=await request({action:"setEnabled",enabled:next});if(g===seq){enabled=j.enabled;showConfig();drawDetail();note("تم حفظ الإعداد بشكل مستقل عن المنتجات.");}}
   catch(err){if(g===seq){showConfig();note(err.message);}}finally{if(g===seq)busy=false;e.target.disabled=false;}
 });
-window.ckSupportAdmin={refresh,clear(){seq++;rows=[];cursor=null;selected="";enabled=false;busy=false;list.replaceChildren();detail.replaceChildren();note("");showConfig();$("supportReload").disabled=false;$("supportEnabled").disabled=false;}};
+window.ckSupportAdmin={refresh,clear(){seq++;rows=[];cursor=null;selected="";enabled=false;busy=false;list.replaceChildren();detail.replaceChildren();$("supportCounts").replaceChildren();note("");showConfig();$("supportReload").disabled=false;$("supportEnabled").disabled=false;}};
 if(demo)root.hidden=false;
