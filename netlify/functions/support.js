@@ -4,12 +4,18 @@ import webpush from "web-push";
 import { json,noContent,corsHeaders,isSameOrigin,isProductionRequest,requireAuth,clientIp,rateLimit } from "../lib/auth.js";
 import { makeRecord,monthKey } from "./feedback.js";
 import { ID,SECRET,TYPES,STATES,owns,threadKey,createThread,publicThread,addMessage,cleanSubscription,mutateThread } from "../lib/support.js";
-const storeFor=()=>getStore({name:"campuskart-support-v1",consistency:"strong"});
+export function createSupportHandler(deps={}){
+const openStore=deps.getStore||getStore;
+const pushClient=deps.webpush||webpush;
+const production=deps.isProductionRequest||isProductionRequest;
+const authorized=deps.requireAuth||requireAuth;
+const limiter=deps.rateLimit||rateLimit;
+const storeFor=()=>openStore({name:"campuskart-support-v1",consistency:"strong"});
 const readConfig=async store=>({enabled:(await store.get("config",{type:"json"}))?.enabled===true});
 async function vapid(store){
   let keys=await store.get("vapid",{type:"json"});
   if(!keys){
-    await store.setJSON("vapid",webpush.generateVAPIDKeys(),{onlyIfNew:true});
+    await store.setJSON("vapid",pushClient.generateVAPIDKeys(),{onlyIfNew:true});
     keys=await store.get("vapid",{type:"json"});
   }
   if(!keys?.publicKey||!keys?.privateKey)throw Error("الإشعارات غير متاحة");
@@ -20,7 +26,7 @@ async function sendPush(store,t,req){
   try{
     if(!(await readConfig(store)).enabled)return "disabled";
     const keys=await vapid(store);
-    await webpush.sendNotification(t.subscription,JSON.stringify({type:"support-reply"}),{
+    await pushClient.sendNotification(t.subscription,JSON.stringify({type:"support-reply"}),{
       TTL:86400,urgency:"normal",topic:"support-reply",timeout:3500,
       vapidDetails:{subject:new URL(req.url).origin,publicKey:keys.publicKey,privateKey:keys.privateKey}
     });
@@ -38,13 +44,13 @@ async function sendPush(store,t,req){
 }
 async function limited(req,context,bucket,limit,windowMs){
   const key=createHmac("sha256",process.env.SESSION_SECRET||process.env.ADMIN_PASSWORD||"support-rate").update(new Date().toISOString().slice(0,10)+"|"+clientIp(req,context)).digest("hex");
-  return rateLimit(bucket,key,{limit,windowMs});
+  return limiter(bucket,key,{limit,windowMs});
 }
-export default async(req,context)=>{
+return async(req,context)=>{
   const cors=corsHeaders(req,"GET, POST, OPTIONS"),reply=(body,status=200)=>json(body,status,cors);
   if(req.method==="OPTIONS")return noContent(cors);
   // Preview demo uses local fictional data. Never touch production support Blobs.
-  if(!isProductionRequest(req))return reply(req.method==="GET"?{enabled:false,preview:true}:{error:"المعاينة محلية فقط"},req.method==="GET"?200:403);
+  if(!production(req))return reply(req.method==="GET"?{enabled:false,preview:true}:{error:"المعاينة محلية فقط"},req.method==="GET"?200:403);
   try{
     const store=storeFor();
     if(req.method==="GET")return reply(await readConfig(store));
@@ -52,7 +58,7 @@ export default async(req,context)=>{
     if(Number(req.headers.get("content-length")||0)>32000)return reply({error:"الطلب كبير"},413);
     let b;try{const raw=await req.text();if(Buffer.byteLength(raw)>32000)return reply({error:"الطلب كبير"},413);b=JSON.parse(raw);}catch{return reply({error:"بيانات غير صالحة"},400);}
     const action=b?.action,admin=["adminConfig","setEnabled","adminList","adminReply","adminState"].includes(action);
-    if(admin){const denied=requireAuth(req);if(denied)return denied;}
+    if(admin){const denied=authorized(req);if(denied)return denied;}
     if(action==="adminConfig")return reply(await readConfig(store));
     if(action==="setEnabled"){
       if(typeof b.enabled!=="boolean")return reply({error:"إعداد غير صالح"},400);
@@ -82,7 +88,7 @@ export default async(req,context)=>{
       let t=await store.get(key,{type:"json"});
       if(t&&!owns(t,b.secret))return reply({error:"المحادثة غير متاحة"},404);
       if(!t){
-        const catalog=await getStore({name:"campuskart-data",consistency:"strong"}).get("store.json",{type:"json"});
+        const catalog=await openStore({name:"campuskart-data",consistency:"strong"}).get("store.json",{type:"json"});
         if(!catalog||catalog.settings?.maintenanceMode===true)return reply({error:"المتجر غير متاح"},503);
         let entry;try{entry=makeRecord(catalog,b);}catch{return reply({error:"تحقق من النص والطلب"},400);}
         const candidate=createThread(entry.record,b.id,b.secret,b.type);
@@ -91,7 +97,7 @@ export default async(req,context)=>{
         if(!owns(t,b.secret))return reply({error:"المحادثة غير متاحة"},404);
       }
       // Keep the original feedback log intact, including when the feature is turned off.
-      const legacy=getStore({name:"campuskart-feedback",consistency:"strong"});
+      const legacy=openStore({name:"campuskart-feedback",consistency:"strong"});
       await legacy.setJSON("feedback/"+monthKey(new Date(Number(t.id.slice(0,13))))+"/"+t.id+".json",t.record,{onlyIfNew:true});
       return reply({ok:true,thread:publicThread(t)});
     }
@@ -131,4 +137,6 @@ export default async(req,context)=>{
     return reply({error:"تعذر إكمال العملية. حاول مرة أخرى."},503);
   }
 };
+}
+export default createSupportHandler();
 export const config={path:"/api/support",rateLimit:{windowLimit:150,windowSize:60,aggregateBy:["ip","domain"]}};
