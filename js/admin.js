@@ -51,6 +51,7 @@ const authHeaders = () => ({ Authorization: "Bearer " + (session?.token || "") }
 
 /** يعالج 401 من أي طلب: يُخرج المستخدم */
 function handleUnauthorized() {
+  window.ckSupportAdmin?.clear();
   storeSession(null);
   feedbackRequest++;$("feedbackList").textContent="";$("feedbackCount").textContent="";feedbackCursor=null;
   $("appScreen").style.display = "none"; $("loginScreen").style.display = "grid";
@@ -103,6 +104,7 @@ async function autoLogin() {
   return false;
 }
 function doLogout() {
+  window.ckSupportAdmin?.clear();
   if(DEMO){location.assign("/");return;}
   if (isDirty() && !confirm("لديك تعديلات غير محفوظة. الخروج وفقدها؟")) return;
   storeSession(null); DATA = null; SAVED_DATA = null;
@@ -177,7 +179,7 @@ function switchTab(tab) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === tab));
   document.querySelectorAll(".tab-pane").forEach((p) => (p.style.display = "none"));
   $("tab-" + tab).style.display = "block";
-  if(tab==="feedback")loadFeedback();
+  if(tab==="feedback"){loadFeedback();window.ckSupportAdmin?.refresh();}
 }
 function renderAll() {
   $("storeNameLabel").textContent = DATA.settings.storeName ? "— " + DATA.settings.storeName : "";
@@ -905,3 +907,5 @@ $("themeToggleBtn").addEventListener("click", () => applyAdminTheme(document.doc
   }
   if (!(await autoLogin())) { $("loginScreen").style.display = "grid"; $("appScreen").style.display = "none"; }
 })();
+
+window.ckSupportAdminAuth=()=>authHeaders();
