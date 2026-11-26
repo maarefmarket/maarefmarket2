@@ -812,7 +812,7 @@ async function loadFeedback(append=false){
     else $("feedbackList").innerHTML=html||'<p class="hint">لا توجد آراء محفوظة لهذا الشهر.</p>';
     feedbackCursor=j.nextCursor||null;$("feedbackCount").textContent="عدد الآراء: "+j.total;
     $("moreFeedback").hidden=!feedbackCursor;
-  }catch(e){if(seq===feedbackRequest){if(!append)$("feedbackList").textContent=e.message||"تعذر التحميل";else toast("تعذر تحميل المزيد","error");$("moreFeedback").hidden=!feedbackCursor;}}
+  }catch(e){if(seq===feedbackRequest){if(!append)$("feedbackList").textContent=e.name==="TimeoutError"||e.name==="AbortError"?"انتهت مهلة تحميل الآراء، اضغط تحديث السجل لإعادة المحاولة.":e.message||"تعذر التحميل";else toast("تعذر تحميل المزيد","error");$("moreFeedback").hidden=!feedbackCursor;}}
   finally{if(seq===feedbackRequest){feedbackLoading=false;$("refreshFeedback").disabled=false;}}
 }
 $("feedbackMonth").addEventListener("change",()=>loadFeedback());
