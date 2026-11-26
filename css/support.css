@@ -1,0 +1,28 @@
+
+/* Scoped support styles, reuse all existing theme tokens. */
+.support-unread{min-width:22px;height:22px;padding-inline:5px;display:grid;place-items:center;background:var(--accent);color:var(--ink,#1b2333);font-size:12px;border-radius:99px}
+#supportDialog{width:min(94vw,560px)}
+.support-content{display:grid;gap:10px;min-width:0}
+.support-actions{display:grid;gap:8px}
+.support-input{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font:inherit;min-height:44px}
+.support-input:focus{outline:2px solid var(--accent)}
+.support-hint,#supportStatus{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+#supportStatus:not(:empty){padding:8px;margin-bottom:8px;background:var(--elevated);border-radius:8px}
+.support-thread-button,.support-admin-thread{display:grid;gap:5px;text-align:start;min-width:0;width:100%;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:12px;font:inherit;cursor:pointer}
+.support-thread-button strong,.support-admin-thread strong{color:var(--brand)}
+.support-thread-button span,.support-admin-thread span{overflow-wrap:anywhere}
+.support-thread-button small,.support-admin-thread small,.support-message small,.support-admin-message small{color:var(--muted);font-size:11px}
+.support-admin-thread.selected{border-color:var(--brand);background:var(--brand-soft)}
+.support-messages{display:grid;gap:8px;max-height:44dvh;overflow:auto;padding:4px}
+.support-message,.support-admin-message{padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--elevated);overflow-wrap:anywhere;white-space:pre-wrap;min-width:0}
+.support-message p,.support-admin-message p{margin:6px 0 0;white-space:pre-wrap}
+.support-message.support-admin-message,.support-admin-message.staff{background:var(--brand-soft);border-color:var(--brand)}
+.support-visitor-message{margin-inline-end:24px}
+.support-messages .support-admin-message{margin-inline-start:24px}
+.support-recovery{border:1px solid var(--line);border-radius:10px;padding:10px;overflow-wrap:anywhere}
+.support-recovery summary{cursor:pointer;color:var(--brand);font-weight:700}
+.support-recovery .btn,.support-recovery .support-input{margin-top:8px}
+.support-content .btn{min-height:44px;white-space:normal}
+.support-admin-grid{display:grid;gap:12px;grid-template-columns:minmax(0,1fr);margin-top:12px}
+#supportAdminDetail{border:1px solid var(--line);border-radius:12px;padding:12px;align-content:start}
+@media(min-width:900px){.support-admin-grid{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}}
