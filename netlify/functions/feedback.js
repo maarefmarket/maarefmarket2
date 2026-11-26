@@ -2,6 +2,7 @@ import { getStore } from "@netlify/blobs";
 import { createHmac } from "node:crypto";
 import { json,noContent,corsHeaders,isSameOrigin,isProductionRequest,requireAuth,clientIp,rateLimit } from "../lib/auth.js";
 import { buildOrder } from "../lib/order.js";
+import { notifyFeedbackAdmin } from "../lib/feedback-alert.js";
 
 const STORE="campuskart-feedback", MAX_TEXT=1500, PAGE=25;
 const ID_RE=/^(\d{13})-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
@@ -38,9 +39,21 @@ export default async(req,context)=>{
       const store=getStore({name:STORE,consistency:"strong"});
       const {blobs}=await store.list({prefix});
       const keys=blobs.map(b=>b.key).filter(k=>k.startsWith(prefix)&&k.endsWith(".json")&&ID_RE.test(k.slice(prefix.length,-5))).sort().reverse();
+      if(u.searchParams.get("status")==="1"){
+        const since=u.searchParams.get("since")||"";
+        const unread=since&&since.startsWith(prefix)?keys.filter(k=>k>since).length:keys.length;
+        return json({month,total:keys.length,unread,latest:keys[0]||""},200,cors);
+      }
       const eligible=cursor?keys.filter(k=>k<cursor):keys;
       const page=eligible.slice(0,PAGE);
-      const records=(await Promise.all(page.map(k=>store.get(k,{type:"json"})))).filter(Boolean);
+      const support=getStore({name:"campuskart-support-v1",consistency:"strong"});
+      const records=(await Promise.all(page.map(async k=>{
+        const record=await store.get(k,{type:"json"});if(!record)return null;
+        const id=k.slice(prefix.length,-5);
+        // Old records use the identical ID as their support mirror, if one exists.
+        let replyable=null;try{replyable=!!(await support.get("threads/"+id+".json",{type:"json"}));}catch{}
+        return {...record,id,replyable};
+      }))).filter(Boolean);
       return json({records,month,total:keys.length,nextCursor:eligible.length>PAGE?page.at(-1):null},200,cors);
     }catch{console.error("Feedback list unavailable");return json({error:"تعذر تحميل سجل الآراء"},503,cors);}
   }
@@ -63,7 +76,8 @@ export default async(req,context)=>{
     if(!catalog||catalog.settings?.maintenanceMode===true)return json({error:"المتجر غير متاح حالياً"},503,cors);
     let entry;try{entry=makeRecord(catalog,body);}catch{return json({error:"تعذر حفظ الرأي: تحقق من النص والبيانات"},400,cors);}
     const store=getStore({name:STORE,consistency:"strong"});
-    await store.setJSON(entry.key,entry.record,{onlyIfNew:true});
+    const written=await store.setJSON(entry.key,entry.record,{onlyIfNew:true});
+    if(written.modified)await notifyFeedbackAdmin("new");
     return json({ok:true},200,cors);
   }catch{console.error("Feedback save unavailable");return json({error:"تعذر حفظ الرأي؛ أعد المحاولة"},503,cors);}
 };
