@@ -1,5 +1,5 @@
 import { getDeployStore } from "@netlify/blobs";
-import { createHash } from "node:crypto";
+import { createHmac } from "node:crypto";
 import webpush from "web-push";
 import {json,noContent,corsHeaders,isSameOrigin,isProductionRequest,clientIp} from "../lib/auth.js";
 import {cleanSubscription} from "../lib/support.js";
@@ -24,7 +24,7 @@ export default async(req,context)=>{
     if(Number(req.headers.get("content-length")||0)>8192)return reply({error:"بيانات كبيرة"},413);
     const raw=await req.text();if(Buffer.byteLength(raw)>8192)return reply({error:"بيانات كبيرة"},413);
     let sub;try{sub=cleanSubscription(JSON.parse(raw).subscription);}catch{return reply({error:"اشتراك غير صالح"},400);}
-    const bucket="rate/"+createHash("sha256").update(String(clientIp(req,context))+"|"+Math.floor(Date.now()/600000)).digest("hex");
+    const bucket="rate/"+createHmac("sha256",keys.privateKey).update(String(clientIp(req,context))+"|"+Math.floor(Date.now()/600000)).digest("hex");
     let allowed=false;
     for(let i=0;i<4;i++){
       const prev=await store.getWithMetadata(bucket,{type:"json"}),n=Number(prev?.data?.count)||0;
@@ -34,7 +34,7 @@ export default async(req,context)=>{
       if(write.modified){allowed=true;break;}
     }
     if(!allowed)return reply({error:"تم بلوغ حد الإشعارات التجريبية. حاول لاحقاً."},429);
-    await webpush.sendNotification(sub,JSON.stringify({type:"support-reply"}),{TTL:120,timeout:3500,urgency:"normal",vapidDetails:{subject:u.origin,publicKey:keys.publicKey,privateKey:keys.privateKey}});
+    await webpush.sendNotification(sub,JSON.stringify({type:"support-test"}),{TTL:120,timeout:3500,urgency:"normal",vapidDetails:{subject:u.origin,publicKey:keys.publicKey,privateKey:keys.privateKey}});
     return reply({ok:true,accepted:true});
   }catch{console.error("Preview notification unavailable");return reply({error:"لم يقبل مزوّد الإشعارات الاختبار. جرّب متصفحاً مدعوماً أو أعد الاشتراك."},503);}
 };
