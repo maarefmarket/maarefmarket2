@@ -195,7 +195,7 @@ td .row-actions{display:flex;gap:4px;flex-wrap:wrap}
 .empty{text-align:center;padding:40px 16px;color:var(--muted)}
 .danger-zone{border:1px dashed var(--danger);border-radius:12px;padding:14px;background:rgba(220,38,38,.05);margin-top:20px}
 .danger-zone h3{color:var(--danger)}
-.savebar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--line);padding:10px 14px;display:none;z-index:60;box-shadow:0 -6px 20px rgba(0,0,0,.15)}
+.savebar{background:var(--surface);border-top:1px solid var(--line);padding:10px 14px;display:none;min-width:0}
 .savebar.show{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .savebar .status{flex:1;font-size:13.5px;color:var(--muted)}
 
@@ -278,3 +278,17 @@ td .row-actions{display:flex;gap:4px;flex-wrap:wrap}
 }
 @media(max-width:359px){.appbar-inner>.btn{padding-inline:6px}.filter-bar{grid-template-columns:1fr}.admin-product-row{padding:9px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Reserve separate grid rows for the header, scrollable content and save bar.
+   No fixed/absolute overlay: the last product remains fully reachable. */
+body{min-height:100dvh}
+#appScreen{height:100vh;height:100dvh;grid-template-rows:auto minmax(0,1fr) auto;min-width:0}
+#appScreen>.appbar{position:relative;top:auto;min-width:0}
+#appScreen>main{width:100%;min-width:0;min-height:0;overflow:auto;padding-block:18px 24px;overscroll-behavior-y:contain;scroll-padding-block:12px;scrollbar-gutter:stable}
+#appScreen>.savebar{position:relative;min-width:0;padding-inline:max(14px,env(safe-area-inset-left,0px))}
+.savebar .status{min-width:0;overflow-wrap:anywhere}
+.savebar .btn{min-height:44px;flex-shrink:0}
+@media(max-width:480px){.savebar.show{gap:8px}.savebar .status{flex:1 0 100%;font-size:12px}.savebar .btn{flex:1}}
+/* At very short viewport heights (landscape/large zoom/keyboard),
+   use natural document scrolling rather than squeezing the content. */
+@media(max-height:420px){#appScreen{height:auto;min-height:100vh;min-height:100dvh;grid-template-rows:auto 1fr auto}#appScreen>main{overflow:visible;overscroll-behavior:auto}}

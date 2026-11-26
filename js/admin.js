@@ -111,7 +111,7 @@ function doLogout() {
   window.onbeforeunload = null;
 }
 async function enterApp() {
-  $("loginScreen").style.display = "none"; $("appScreen").style.display = "block";
+  $("loginScreen").style.display = "none"; $("appScreen").style.display = "grid";
   updateSessionLabel();
   await loadData();
 }
@@ -901,7 +901,7 @@ $("themeToggleBtn").addEventListener("click", () => applyAdminTheme(document.doc
   if(DEMO){
     const categories=[{slug:"drinks",name:"مشروبات"},{slug:"snacks",name:"وجبات خفيفة"}];
     DATA=normalize({settings:{storeName:"Maaref Market — معاينة",description:"بيانات تجريبية فقط",rates:{USD_TRY:33,USD_SYP:14000},whatsapps:[],bannersEnabled:true,bannerIntervalSec:7},categories,banners:[],products:[{id:1,name:"عصير تجريبي",category:"drinks",prices:{USD:1.25},availability:"in",images:[]},{id:2,name:"بسكويت تجريبي",category:"snacks",prices:{USD:.75},availability:"limited",images:[]},{id:3,name:"شيبس تجريبي",category:"snacks",prices:{USD:1.5},availability:"out",images:[]}]});
-    SAVED_DATA=deepClone(DATA);$("loginScreen").style.display="none";$("appScreen").style.display="block";$("adminDemoNotice").hidden=false;$("sessionLabel").textContent="معاينة محلية";renderAll();updateDirty();return;
+    SAVED_DATA=deepClone(DATA);$("loginScreen").style.display="none";$("appScreen").style.display = "grid";$("adminDemoNotice").hidden=false;$("sessionLabel").textContent="معاينة محلية";renderAll();updateDirty();return;
   }
   if (!(await autoLogin())) { $("loginScreen").style.display = "grid"; $("appScreen").style.display = "none"; }
 })();
