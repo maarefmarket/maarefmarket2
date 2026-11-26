@@ -497,7 +497,10 @@ function renderBanner(step=0) {
   if (!box || !b) return;
   const src = safeSrc(b.image);
   const link = safeSrc(b.link);
-  const inner = `${src ? `<img src="${src}" alt="">` : ""}<div class="ov"></div><div class="txt">${b.eyebrow ? `<div class="ey">${esc(b.eyebrow)}</div>` : ""}${b.title ? `<h2>${esc(b.title)}</h2>` : ""}</div>`;
+  // Approved natural-height layout: never crop the source advertisement.
+  if(src)box.setAttribute("data-banner-fit","adaptive");else box.removeAttribute("data-banner-fit");
+  const caption=b.eyebrow||b.title? `<div class="txt">${b.eyebrow?`<div class="ey">${esc(b.eyebrow)}</div>`:""}${b.title?`<h2>${esc(b.title)}</h2>`:""}</div>`:"";
+  const inner = src?`<div class="banner-image-frame"><img src="${src}" alt="${esc(b.title||"إعلان المتجر")}"></div>${caption}` : `<div class="ov"></div><div class="txt">${b.eyebrow?`<div class="ey">${esc(b.eyebrow)}</div>`:""}${b.title?`<h2>${esc(b.title)}</h2>`:""}</div>`;
   box.innerHTML = `<div class="banner-slide">${inner}</div>` + (src ? `<button type="button" class="image-hit" data-image-banner="${bannerIdx}" aria-label="تكبير الإعلان"></button>` : link ? `<a href="${link}" target="_blank" rel="noopener" class="image-hit" aria-label="فتح رابط الإعلان"></a>` : "");
   document.querySelectorAll(".banner-dots button").forEach((d, i) => {
     d.classList.toggle("active", i === bannerIdx);
