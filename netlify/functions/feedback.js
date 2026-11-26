@@ -46,13 +46,17 @@ export default async(req,context)=>{
       }
       const eligible=cursor?keys.filter(k=>k<cursor):keys;
       const page=eligible.slice(0,PAGE);
-      let support;try{support=getStore({name:"campuskart-support-v1",consistency:"strong"});}catch{}
+      // One index read rather than one additional Blob fetch per opinion.
+      let linked=null;
+      try{
+        const support=getStore({name:"campuskart-support-v1",consistency:"strong"});
+        const index=await support.list({prefix:"threads/"});
+        linked=new Set(index.blobs.map(x=>x.key));
+      }catch{}
       const records=(await Promise.all(page.map(async k=>{
         const record=await store.get(k,{type:"json"});if(!record)return null;
         const id=k.slice(prefix.length,-5);
-        // Old records use the identical ID as their support mirror, if one exists.
-        let replyable=null;try{if(support)replyable=!!(await support.get("threads/"+id+".json",{type:"json"}));}catch{}
-        return {...record,id,replyable};
+        return {...record,id,replyable:linked?linked.has("threads/"+id+".json"):null};
       }))).filter(Boolean);
       return json({records,month,total:keys.length,latest:keys[0]||"",nextCursor:eligible.length>PAGE?page.at(-1):null},200,cors);
     }catch{console.error("Feedback list unavailable");return json({error:"تعذر تحميل سجل الآراء"},503,cors);}
