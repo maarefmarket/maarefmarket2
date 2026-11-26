@@ -3,6 +3,7 @@ import { createHmac } from "node:crypto";
 import webpush from "web-push";
 import { json,noContent,corsHeaders,isSameOrigin,isProductionRequest,requireAuth,clientIp,rateLimit } from "../lib/auth.js";
 import { makeRecord,monthKey } from "./feedback.js";
+import { notifyFeedbackAdmin } from "../lib/feedback-alert.js";
 import { ID,SECRET,TYPES,STATES,owns,threadKey,createThread,publicThread,addMessage,cleanSubscription,mutateThread } from "../lib/support.js";
 export function createSupportHandler(deps={}){
 const openStore=deps.getStore||getStore;
@@ -10,6 +11,8 @@ const pushClient=deps.webpush||webpush;
 const production=deps.isProductionRequest||isProductionRequest;
 const authorized=deps.requireAuth||requireAuth;
 const limiter=deps.rateLimit||rateLimit;
+const notifyAdmin=deps.notifyAdmin||notifyFeedbackAdmin;
+const alertAdmin=async kind=>{try{await notifyAdmin(kind);}catch{}};
 const storeFor=()=>openStore({name:"campuskart-support-v1",consistency:"strong"});
 const readConfig=async store=>({enabled:(await store.get("config",{type:"json"}))?.enabled===true});
 async function vapid(store){
@@ -57,7 +60,7 @@ return async(req,context)=>{
     if(req.method!=="POST"||!isSameOrigin(req,true))return reply({error:"غير مسموح"},403);
     if(Number(req.headers.get("content-length")||0)>32000)return reply({error:"الطلب كبير"},413);
     let b;try{const raw=await req.text();if(Buffer.byteLength(raw)>32000)return reply({error:"الطلب كبير"},413);b=JSON.parse(raw);}catch{return reply({error:"بيانات غير صالحة"},400);}
-    const action=b?.action,admin=["adminConfig","setEnabled","adminList","adminReply","adminState"].includes(action);
+    const action=b?.action,admin=["adminConfig","setEnabled","adminList","adminGet","adminReply","adminState"].includes(action);
     if(admin){const denied=authorized(req);if(denied)return denied;}
     if(action==="adminConfig")return reply(await readConfig(store));
     if(action==="setEnabled"){
@@ -76,6 +79,12 @@ return async(req,context)=>{
       const eligible=cursor?ids.filter(id=>id<cursor):ids,page=eligible.slice(0,25);
       const records=(await Promise.all(page.map(id=>store.get(threadKey(id),{type:"json"})))).filter(Boolean).map(publicThread);
       return reply({enabled,records,total:ids.length,nextCursor:eligible.length>25?page.at(-1):null});
+    }
+    if(action==="adminGet"){
+      if(!ID.test(String(b.id||"")))return reply({error:"المحادثة غير متاحة"},404);
+      const t=await store.get(threadKey(b.id),{type:"json"});
+      if(!t)return reply({error:"هذا الرأي غير مرتبط بمحادثة؛ لا يمكن إيصال رد لصاحبه.",code:"NO_THREAD"},404);
+      return reply({enabled,thread:publicThread(t)});
     }
     if(!enabled)return reply({error:"نظام المراسلات متوقف",code:"DISABLED"},409);
     if(!admin){
@@ -98,7 +107,8 @@ return async(req,context)=>{
       }
       // Keep the original feedback log intact, including when the feature is turned off.
       const legacy=openStore({name:"campuskart-feedback",consistency:"strong"});
-      await legacy.setJSON("feedback/"+monthKey(new Date(Number(t.id.slice(0,13))))+"/"+t.id+".json",t.record,{onlyIfNew:true});
+      const written=await legacy.setJSON("feedback/"+monthKey(new Date(Number(t.id.slice(0,13))))+"/"+t.id+".json",t.record,{onlyIfNew:true});
+      if(written.modified)await alertAdmin("new");
       return reply({ok:true,thread:publicThread(t)});
     }
     if(action==="inbox"){
@@ -122,6 +132,7 @@ return async(req,context)=>{
     if(action==="message"||action==="adminReply"){
       const role=admin?"admin":"visitor";
       const r=await mutateThread(store,key,t=>{if(!admin&&!owns(t,b.secret))throw Error("المحادثة غير متاحة");return addMessage(t,role,b.text,b.op);});
+      if(!admin&&r.changed)await alertAdmin("followup");
       const push=admin&&r.changed?await sendPush(store,r.thread,req):"not-sent";
       return reply({ok:true,thread:publicThread(r.thread),push});
     }
