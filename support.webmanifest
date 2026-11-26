@@ -1,0 +1,20 @@
+{
+  "name": "Maaref Market",
+  "short_name": "Maaref Market",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "lang": "ar",
+  "dir": "rtl",
+  "background_color": "#F4F7FC",
+  "theme_color": "#2B5FB3",
+  "icons": [
+    {
+      "src": "/assets/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
