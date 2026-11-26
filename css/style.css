@@ -450,12 +450,3 @@ html.maintenance-mode #shopDock{display:none!important}
 .general-feedback-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(min-width:768px){.feedback-float-row{padding:8px 20px 12px}}
 @media(max-width:767px){.feedback-float-row{padding-block:4px 6px}.general-feedback-btn{font-size:12px;padding-inline:12px}}
-
-/* Approved adaptive banner: natural image ratio, bounded height, no cropping. */
-#bannerBox[data-banner-fit="adaptive"]{min-height:0;background:var(--surface)}
-#bannerBox[data-banner-fit="adaptive"] .banner-slide{min-height:0}
-#bannerBox[data-banner-fit="adaptive"] .banner-image-frame{background:var(--elevated);display:grid;place-items:center;overflow:hidden}
-#bannerBox[data-banner-fit="adaptive"] img{position:static;inset:auto;display:block;width:100%;height:auto;max-height:clamp(280px,50vw,440px);object-fit:contain;object-position:center}
-#bannerBox[data-banner-fit="adaptive"] .txt{min-height:0;padding:10px 14px;background:var(--surface);color:var(--fg);gap:3px}
-#bannerBox[data-banner-fit="adaptive"] .ey{color:var(--accent-deep);font-size:11px;letter-spacing:normal}
-#bannerBox[data-banner-fit="adaptive"] h2{color:var(--fg);font-size:clamp(15px,2.5vw,20px);margin:0;line-height:1.5}
