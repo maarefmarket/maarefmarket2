@@ -9,7 +9,7 @@ const id=()=>Date.now()+"-"+randomUUID(),secret="a".repeat(64),wrong="b".repeat(
 const origin="https://maarefmarket.netlify.app";
 const fakeSub={endpoint:"https://fcm.googleapis.com/fcm/send/test",keys:{p256dh:Buffer.concat([Buffer.from([4]),Buffer.alloc(64,1)]).toString("base64url"),auth:Buffer.alloc(16,2).toString("base64url")}};
 function fixture(){
-  const buckets=new Map();let etag=0,pushCalls=[],pushFailure=false;
+  const buckets=new Map();let etag=0,pushCalls=[],pushFailure=false,alerts=[];
   function getStore({name}){
     if(!buckets.has(name))buckets.set(name,new Map());
     const db=buckets.get(name);
@@ -24,12 +24,12 @@ function fixture(){
       async list({prefix}){return {blobs:[...db.keys()].filter(k=>k.startsWith(prefix)).map(key=>({key}))};}
     };
   }
-  const handler=createSupportHandler({getStore,requireAuth:req=>req.headers.get("authorization")==="Bearer test-admin"?null:new Response("denied",{status:401}),rateLimit:async()=>({allowed:true}),webpush:{generateVAPIDKeys:()=>({publicKey:"public",privateKey:"private"}),sendNotification:async(sub,payload,options)=>{pushCalls.push({sub,payload,options});if(pushFailure)throw Error("offline");}}});
+  const handler=createSupportHandler({getStore,notifyAdmin:async kind=>{alerts.push(kind);},requireAuth:req=>req.headers.get("authorization")==="Bearer test-admin"?null:new Response("denied",{status:401}),rateLimit:async()=>({allowed:true}),webpush:{generateVAPIDKeys:()=>({publicKey:"public",privateKey:"private"}),sendNotification:async(sub,payload,options)=>{pushCalls.push({sub,payload,options});if(pushFailure)throw Error("offline");}}});
   const call=async(body,admin=false,url=origin+"/api/support")=>{
     const res=await handler(new Request(url,body===undefined?{}:{method:"POST",headers:{Origin:new URL(url).origin,"Content-Type":"application/json",...(admin?{Authorization:"Bearer test-admin"}:{})},body:JSON.stringify(body)}),{ip:"test"});
     return {status:res.status,body:await res.json().catch(()=>null)};
   };
-  return {getStore,call,buckets,pushCalls,failPush(){pushFailure=true;}};
+  return {getStore,call,buckets,pushCalls,alerts,failPush(){pushFailure=true;}};
 }
 async function setup(f){
   await f.getStore({name:"campuskart-data"}).setJSON("store.json",{settings:{storeName:"Test",rates:{USD_TRY:33,USD_SYP:14000}},categories:[],banners:[],products:[{id:1,name:"Product",prices:{USD:1.25}}]});
@@ -109,4 +109,22 @@ test("worker does not cache or intercept storefront traffic",async()=>{
   const source=await readFile(new URL("../support-sw.js",import.meta.url),"utf8");
   assert.doesNotMatch(source,/addEventListener\(["']fetch|caches\./);
   assert.match(source,/addEventListener\("push"/);
+});
+
+test("new opinion and followup alert once, direct reply lookup is admin-only",async()=>{
+  const f=fixture();await setup(f);const body=create();
+  await f.call(body);await f.call(body);
+  assert.deepEqual(f.alerts,["new"]);
+  const lookup={action:"adminGet",id:body.id};
+  assert.equal((await f.call(lookup)).status,401);
+  const direct=await f.call(lookup,true);
+  assert.equal(direct.body.thread.id,body.id);
+  assert.equal(direct.body.thread.hash,undefined);
+  assert.equal(direct.body.enabled,true);
+  const follow={action:"message",id:body.id,secret,op:randomUUID(),text:"متابعة"};
+  await f.call(follow);await f.call(follow);
+  assert.deepEqual(f.alerts,["new","followup"]);
+  assert.equal((await f.call({...lookup,id:id()},true)).body.code,"NO_THREAD");
+  await f.call({action:"setEnabled",enabled:false},true);
+  assert.equal((await f.call(lookup,true)).body.enabled,false);
 });

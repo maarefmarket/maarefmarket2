@@ -35,6 +35,7 @@ function demoAPI(b){
   if(!b||b.action==="adminConfig")return {enabled};
   if(b.action==="setEnabled"){localStorage.setItem(demoFlag,b.enabled?"on":"off");return {enabled:b.enabled};}
   if(b.action==="adminList")return {enabled,records:rows.slice().reverse().map(out),total:rows.length,nextCursor:null};
+  if(b.action==="adminGet"){const t=rows.find(r=>r.id===b.id);if(!t)throw Error("المحادثة غير متاحة");return {enabled,thread:out(t)};}
   if(!enabled){const e=Error("نظام المراسلات متوقف");e.code="DISABLED";throw e;}
   if(b.action==="create"){
     let t=rows.find(r=>r.id===b.id);

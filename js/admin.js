@@ -51,7 +51,7 @@ const authHeaders = () => ({ Authorization: "Bearer " + (session?.token || "") }
 
 /** يعالج 401 من أي طلب: يُخرج المستخدم */
 function handleUnauthorized() {
-  window.ckSupportAdmin?.clear();
+  window.ckSupportAdmin?.clear();window.ckFeedbackAlerts?.clear();
   storeSession(null);
   feedbackRequest++;$("feedbackList").textContent="";$("feedbackCount").textContent="";feedbackCursor=null;
   $("appScreen").style.display = "none"; $("loginScreen").style.display = "grid";
@@ -104,9 +104,9 @@ async function autoLogin() {
   return false;
 }
 function doLogout() {
-  window.ckSupportAdmin?.clear();
   if(DEMO){location.assign("/");return;}
   if (isDirty() && !confirm("لديك تعديلات غير محفوظة. الخروج وفقدها؟")) return;
+  window.ckSupportAdmin?.clear();window.ckFeedbackAlerts?.clear();
   storeSession(null); DATA = null; SAVED_DATA = null;
   feedbackRequest++;$("feedbackList").textContent="";$("feedbackCount").textContent="";feedbackCursor=null;
   $("appScreen").style.display = "none"; $("loginScreen").style.display = "grid"; $("loginErr").textContent = "";
@@ -115,6 +115,7 @@ function doLogout() {
 async function enterApp() {
   $("loginScreen").style.display = "none"; $("appScreen").style.display = "grid";
   updateSessionLabel();
+  window.ckFeedbackAlerts?.poll();
   await loadData();
 }
 
@@ -789,7 +790,7 @@ function renderFeedbackRecord(r){
   const stamp=Number.isNaN(date.getTime())?"—":feedbackDate.format(date);
   const general=r.status==="general-feedback";
   const products=general?'<p class="hint">لا يوجد طلب مرتبط بهذا الرأي.</p>':`<details><summary>المنتجات المحددة (${r.items?.length||0})</summary><ul>${(r.items||[]).map(i=>`<li>${esc(i.name)} × ${esc(i.qty)} — ${esc(formatAmount(i.total,i.cur))} ${esc(CUR_SYM[i.cur]||i.cur)}</li>`).join("")}</ul></details><p class="hint">محاولة طلب قبل الانتقال إلى واتساب</p>`;
-  return `<article class="feedback-record"><div class="feedback-meta"><strong>${general?"رأي عام — مجهول":"رأي مع طلب — مجهول"}</strong><time dir="ltr" datetime="${esc(r.timestamp)}">${esc(stamp)}</time></div><p class="feedback-text">${esc(r.text)}</p>${products}</article>`;
+  return `<article class="feedback-record"><div class="feedback-meta"><strong>${general?"رأي عام — مجهول":"رأي مع طلب — مجهول"}</strong><time dir="ltr" datetime="${esc(r.timestamp)}">${esc(stamp)}</time></div><p class="feedback-text">${esc(r.text)}</p>${products}${r.id&&r.replyable!==false?`<button type="button" class="btn btn-primary btn-sm" data-feedback-reply="${esc(r.id)}">↩ رد</button>`: `<p class="hint">رأي قديم دون محادثة مرتبطة — لا يمكن إيصال رد لصاحبه.</p>`}</article>`;
 }
 async function loadFeedback(append=false){
   if(DEMO){const m=$("feedbackMonth");if(!m.value)m.value=currentFeedbackMonth();const sample={timestamp:new Date().toISOString(),text:"مثال تجريبي: أتمنى إضافة المزيد من المنتجات.",items:[{name:"عصير تجريبي",qty:2,cur:"USD",total:2.5}]};const has=m.value===currentFeedbackMonth();$("feedbackList").innerHTML=has?renderFeedbackRecord(sample):"<p>لا توجد آراء في هذا الشهر.</p>";$("feedbackCount").textContent="آراء تجريبية: "+(has?1:0);$("moreFeedback").hidden=true;return;}
@@ -812,12 +813,14 @@ async function loadFeedback(append=false){
     else $("feedbackList").innerHTML=html||'<p class="hint">لا توجد آراء محفوظة لهذا الشهر.</p>';
     feedbackCursor=j.nextCursor||null;$("feedbackCount").textContent="عدد الآراء: "+j.total;
     $("moreFeedback").hidden=!feedbackCursor;
+    if(!append&&month.value===currentFeedbackMonth())window.ckFeedbackAlerts?.seen(j.month,j.latest);
   }catch(e){if(seq===feedbackRequest){if(!append)$("feedbackList").textContent=e.name==="TimeoutError"||e.name==="AbortError"?"انتهت مهلة تحميل الآراء، اضغط تحديث السجل لإعادة المحاولة.":e.message||"تعذر التحميل";else toast("تعذر تحميل المزيد","error");$("moreFeedback").hidden=!feedbackCursor;}}
   finally{if(seq===feedbackRequest){feedbackLoading=false;$("refreshFeedback").disabled=false;}}
 }
 $("feedbackMonth").addEventListener("change",()=>loadFeedback());
 $("refreshFeedback").addEventListener("click",()=>loadFeedback());
 $("moreFeedback").addEventListener("click",()=>loadFeedback(true));
+$("feedbackList").addEventListener("click",e=>{const b=e.target.closest("[data-feedback-reply]");if(b)window.ckSupportAdmin?.openReply(b.dataset.feedbackReply);});
 
 /* ---------- ربط الأحداث ---------- */
 document.addEventListener("click", (e) => {
@@ -909,3 +912,5 @@ $("themeToggleBtn").addEventListener("click", () => applyAdminTheme(document.doc
 })();
 
 window.ckSupportAdminAuth=()=>authHeaders();
+
+window.ckOpenFeedback=()=>switchTab("feedback");

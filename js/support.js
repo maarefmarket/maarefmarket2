@@ -199,7 +199,16 @@ window.ckSupport={
   get enabled(){return enabled;},open:openHub,
   decorate(pending){$("supportTypeRow").hidden=!enabled;$("supportType").value="suggestion";pending.supportEnabled=enabled;},
   async send(pending,body,legacy){
-    if(!pending.supportEnabled||!enabled)return legacy();
+    // The feature configuration may still be loading when a customer opens
+    // feedback immediately after entering the store. Give it a bounded chance
+    // to resolve rather than silently creating an unreplyable legacy opinion.
+    if(!enabled&&configLoading){
+      let timer;
+      try{await Promise.race([configLoading,new Promise(resolve=>{timer=setTimeout(resolve,1800);})]);}
+      finally{clearTimeout(timer);}
+    }
+    if(pending.controller.signal.aborted)throw Error("أُلغيت العملية");
+    if(!enabled)return legacy();
     readKeys();
     let k=pending.supportKey;
     if(!k){

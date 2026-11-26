@@ -40,6 +40,7 @@
       </div>
       <div class="app-spacer"></div>
       <span id="sessionLabel" class="session"></span>
+      <button id="adminFeedbackBell" class="btn btn-ghost btn-sm admin-feedback-bell" type="button" aria-label="آراء جديدة" hidden>🔔</button>
       <span id="dirtyBadge" class="unsaved" style="display:none">⚠ غير محفوظ</span>
       <span id="savedBadge" class="saved" style="display:none">✓ محفوظ</span>
       <a href="/" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">👁 معاينة</a>
@@ -55,7 +56,7 @@
         <button class="tab" data-tab="rates">💱 أسعار الصرف</button>
         <button class="tab" data-tab="colors">🎨 الألوان</button>
         <button class="tab" data-tab="settings">⚙️ الإعدادات</button>
-        <button class="tab" data-tab="feedback">💬 آراء الزبائن</button>
+        <button class="tab" data-tab="feedback">💬 آراء الزبائن <b id="adminFeedbackBadge" class="admin-feedback-badge" hidden></b></button>
         <button class="tab" data-tab="backup">💼 نسخ احتياطي</button>
       </div>
     </div>
@@ -234,6 +235,7 @@
     <!-- النسخ الاحتياطي -->
     <section id="tab-feedback" class="tab-pane" style="display:none">
       <div class="section-head"><div><h2>💬 آراء الزبائن</h2><p>سجل الآراء العامة والآراء المرسلة قبل الطلب دون اسم أو رقم هاتف. تظهر المنتجات فقط مع آراء الطلبات، وليست دليلاً على إرسال الطلب في واتساب.</p></div></div>
+      <div id="feedbackNewAlert" class="card feedback-new-alert" role="status" hidden><strong id="feedbackNewText"></strong> <button type="button" id="feedbackNewOpen" class="btn btn-primary">عرض الآراء الجديدة</button></div>
       <div id="supportAdmin" class="card">
         <h3>💬 المراسلات المجهولة</h3>
         <label class="check"><input type="checkbox" id="supportEnabled"> تشغيل نظام المراسلات والردود</label>
@@ -242,9 +244,10 @@
         <div id="supportAdminStatus" role="status" class="hint"></div>
         <div class="row cols-3 mt"><label>شهر المحادثات<input id="supportMonth" class="field" type="month"></label><label>البحث في الرسائل المحمّلة<input id="supportSearch" class="field" type="search" placeholder="بحث"></label><label>الحالة<select id="supportFilter" class="field"><option value="">الكل</option><option value="new">بانتظار الرد</option><option value="answered">تم الرد</option><option value="resolved">تم الحل</option></select></label><label>النوع<select id="supportFilterType" class="field"><option value="">الكل</option><option value="suggestion">اقتراح</option><option value="complaint">شكوى</option><option value="question">استفسار</option></select></label><button id="supportReload" class="btn btn-primary" type="button">تحديث المراسلات</button></div>
         <p id="supportAdminCount" class="hint"></p><div class="support-counts" id="supportCounts" aria-label="حالات المحادثات المحمّلة"></div>
-        <div class="support-admin-grid"><div><div id="supportAdminList" class="support-content"></div><button type="button" id="supportMore" class="btn btn-ghost mt" hidden>عرض المزيد</button></div><div id="supportAdminDetail" class="support-content"></div></div>
+        <div id="supportAdminList" class="support-content"></div><button type="button" id="supportMore" class="btn btn-ghost mt" hidden>عرض المزيد</button>
       </div>
       <div class="card">
+        <h3>جميع الآراء</h3><p class="hint">اضغط «رد» بجانب أي رأي مرتبط بمحادثة. الآراء المرسلة بالنظام القديم لا يمكن الرد عليها.</p>
         <div class="row cols-2">
           <div><label class="label" for="feedbackMonth">شهر السجل</label><input id="feedbackMonth" class="field" type="month"></div>
           <div><button id="refreshFeedback" class="btn btn-primary" type="button">تحديث السجل</button><p id="feedbackCount" class="hint" role="status"></p></div>
@@ -419,8 +422,10 @@
   </div>
 </div>
 
+<dialog id="supportReplyDialog" class="admin-reply-dialog" aria-labelledby="supportReplyTitle"><div class="admin-reply-head"><h2 id="supportReplyTitle">المحادثة والرد</h2><button type="button" id="supportReplyClose" class="btn btn-ghost" aria-label="إغلاق">×</button></div><p id="supportReplyStatus" role="status" aria-live="polite" class="hint"></p><div id="supportAdminDetail" class="support-content"></div></dialog>
 <div id="toast" role="status"></div>
 <script type="module" src="js/admin.js"></script>
 <script type="module" src="js/support-admin.js"></script>
+<script type="module" src="js/admin-feedback-alerts.js"></script>
 </body>
 </html>
