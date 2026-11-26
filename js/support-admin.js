@@ -1,9 +1,10 @@
 import {api,demo,types,states,stamp,element,button} from "./support-client.js";
 const $=id=>document.getElementById(id),root=$("supportAdmin"),list=$("supportAdminList"),detail=$("supportAdminDetail"),status=$("supportAdminStatus");
-let rows=[],cursor=null,selected="",enabled=false,busy=false,seq=0;
+let rows=[],cursor=null,selected="",enabled=false,busy=false,seq=0,openedThread=null;
+const replyDialog=$("supportReplyDialog"),replyStatus=$("supportReplyStatus");
 const headers=()=>window.ckSupportAdminAuth?.()||{};
 const request=b=>api(b,headers());
-const note=s=>{status.textContent=s||"";};
+const note=s=>{status.textContent=s||"";if(replyDialog.open)replyStatus.textContent=s||"";};
 function month(){const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"Asia/Damascus",year:"numeric",month:"2-digit"}).formatToParts(new Date());return parts.find(p=>p.type==="year").value+"-"+parts.find(p=>p.type==="month").value;}
 function showConfig(){ $("supportEnabled").checked=enabled;$("supportMode").textContent=enabled?"النظام مفعّل":"النظام متوقف — الواجهة القديمة تعمل كما كانت"; }
 async function refresh(append=false){
@@ -15,7 +16,7 @@ async function refresh(append=false){
     const j=await request({action:"adminList",month:$("supportMonth").value,cursor:append?cursor:null});if(g!==seq)return;
     rows=append?[...rows,...j.records.filter(t=>!rows.some(x=>x.id===t.id))]:j.records;cursor=j.nextCursor;
     $("supportAdminCount").textContent="عدد محادثات الشهر: "+j.total+" · المعروض: "+rows.length;
-    $("supportMore").hidden=!cursor;drawList();drawDetail();note(demo?"معاينة محلية — لا تُرسل إشعارات حقيقية.":"");
+    $("supportMore").hidden=!cursor;drawList();if(!replyDialog.open)drawDetail();note(demo?"معاينة محلية — لا تُرسل إشعارات حقيقية.":"");
   }catch(e){if(g===seq)note(e.status===401?"انتهت الجلسة، أعد تسجيل الدخول.":e.message);}
   finally{if(g===seq){busy=false;$("supportReload").disabled=false;}}
 }
@@ -27,20 +28,33 @@ function drawList(){
   list.replaceChildren();
   if(!filtered.length)list.append(element("p","لا توجد محادثات مطابقة ضمن الرسائل المحمّلة.","hint"));
   for(const t of filtered){
-    const b=button("",()=>{if(busy)return;selected=t.id;drawList();drawDetail();},"support-admin-thread"+(selected===t.id?" selected":""));
-    b.append(element("strong",types[t.type]+" · "+states[t.state]),element("span",t.record.text.slice(0,140)),element("small",stamp(t.updatedAt)));
-    list.append(b);
+    const card=element("article",null,"support-admin-card");
+    card.append(element("strong",types[t.type]+" · "+states[t.state]),element("p",t.record.text),element("small",stamp(t.updatedAt)));
+    card.append(button(t.state==="resolved"?"عرض المحادثة":"↩ رد",()=>openReply(t.id),"btn btn-primary"));list.append(card);
   }
+}
+async function openReply(id){
+  if(busy)return;
+  busy=true;const g=++seq;selected=id;openedThread=null;
+  replyStatus.textContent="جاري فتح المحادثة…";detail.replaceChildren();
+  if(!replyDialog.open)replyDialog.showModal();
+  try{
+    const j=await request({action:"adminGet",id});
+    if(g!==seq)return;
+    enabled=j.enabled;showConfig();openedThread=j.thread;
+    drawDetail();note("");
+  }catch(e){if(g===seq)note(e.message);}
+  finally{if(g===seq)busy=false;}
 }
 function drawDetail(){
   detail.replaceChildren();
-  const t=rows.find(x=>x.id===selected);
+  const t=openedThread||rows.find(x=>x.id===selected);
   if(!t){detail.append(element("p","اختر محادثة لقراءة الرسائل والرد.","hint"));return;}
   detail.append(element("h3",types[t.type]+" — "+states[t.state]),element("p",t.subscribed?"🔔 إشعارات مفعّلة لهذه المحادثة":"الإشعارات غير مفعّلة؛ الرد متاح داخل الموقع.","hint"));
   const first=element("div",null,"support-admin-message");first.append(element("small","رسالة مجهولة · "+stamp(t.record.timestamp)),element("p",t.record.text));detail.append(first);
   if(t.record.items?.length){const d=element("details");d.append(element("summary","المنتجات المحددة عند محاولة الطلب"));for(const i of t.record.items)d.append(element("p",i.name+" × "+i.qty));detail.append(d);}
   for(const m of t.messages){const b=element("div",null,"support-admin-message"+(m.role==="admin"?" staff":""));b.append(element("small",(m.role==="admin"?"الإدارة":"الزبون — مجهول")+" · "+stamp(m.timestamp)),element("p",m.text));detail.append(b);}
-  if(!enabled){detail.append(element("p","أعد تشغيل النظام للرد أو تغيير الحالة. المحادثات محفوظة.","hint"));return;}
+  if(!enabled){detail.append(element("p","نظام المراسلات متوقف. شغّله من لوحة آراء الزبائن للرد. المحادثات محفوظة.","hint"));return;}
   if(t.state!=="resolved"){
     const field=element("textarea");field.className="field";field.rows=3;field.maxLength=1500;field.placeholder="اكتب ردك...";
     const send=button("إرسال الرد والإشعار",async()=>{
@@ -58,7 +72,7 @@ function drawDetail(){
     catch(e){if(g===seq)note(e.message);}finally{if(g===seq)busy=false;}
   }));
 }
-function replace(t){rows=rows.map(r=>r.id===t.id?t:r);drawList();drawDetail();}
+function replace(t){openedThread=t;rows=rows.map(r=>r.id===t.id?t:r);drawList();drawDetail();}
 $("supportMonth").value=month();
 $("supportReload").addEventListener("click",()=>refresh());
 $("supportMore").addEventListener("click",()=>refresh(true));
@@ -71,5 +85,8 @@ $("supportEnabled").addEventListener("change",async e=>{
   try{const j=await request({action:"setEnabled",enabled:next});if(g===seq){enabled=j.enabled;showConfig();drawDetail();note("تم حفظ الإعداد بشكل مستقل عن المنتجات.");}}
   catch(err){if(g===seq){showConfig();note(err.message);}}finally{if(g===seq)busy=false;e.target.disabled=false;}
 });
-window.ckSupportAdmin={refresh,clear(){seq++;rows=[];cursor=null;selected="";enabled=false;busy=false;list.replaceChildren();detail.replaceChildren();$("supportCounts").replaceChildren();note("");showConfig();$("supportReload").disabled=false;$("supportEnabled").disabled=false;}};
+$("supportReplyClose").addEventListener("click",()=>{if(!busy)replyDialog.close();});
+replyDialog.addEventListener("cancel",e=>{if(busy)e.preventDefault();});
+replyDialog.addEventListener("close",()=>{openedThread=null;selected="";replyStatus.textContent="";detail.replaceChildren();});
+window.ckSupportAdmin={refresh,openReply,clear(){seq++;rows=[];cursor=null;selected="";openedThread=null;enabled=false;busy=false;if(replyDialog.open)replyDialog.close();list.replaceChildren();detail.replaceChildren();$("supportCounts").replaceChildren();note("");showConfig();$("supportReload").disabled=false;$("supportEnabled").disabled=false;}};
 if(demo)root.hidden=false;
