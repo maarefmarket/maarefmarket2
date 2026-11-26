@@ -28,3 +28,10 @@
 .support-count{display:grid;gap:4px;padding:10px;border:1px solid var(--line);background:var(--elevated);border-radius:10px;text-align:center;overflow-wrap:anywhere}
 .support-count strong{color:var(--brand);font-size:20px}
 #supportAdmin .btn-outline{background:var(--elevated);color:var(--fg);border:1px solid var(--line)}
+
+/* Two compact actions share the existing fixed dock row. */
+.feedback-float-row:has(.support-inbox-btn:not([hidden])){gap:8px;flex-wrap:wrap}
+.support-inbox-btn{background:var(--surface);color:var(--brand);border-color:var(--brand)}
+.support-inbox-btn .support-unread{color:var(--ink,#1b2333)}
+.support-sync-status{font-size:12px;color:var(--muted);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.support-sync-status button{font:inherit;border:0;background:transparent;color:var(--brand);text-decoration:underline;cursor:pointer;min-height:44px;padding-inline:4px}
