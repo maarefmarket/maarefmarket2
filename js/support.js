@@ -106,6 +106,7 @@ function drawThread(t){
   }else panel.append(element("p","تم إغلاق المحادثة بعد المعالجة. يمكنك إرسال رأي جديد.","support-hint"));
   const push=button(t.subscribed?"إيقاف إشعارات هذه المحادثة":"🔔 تفعيل إشعارات هذه المحادثة",()=>togglePush(t,k,push));
   panel.append(push);
+  if(demo)panel.append(button("🔔 اختبار إشعار حقيقي على هذا الجهاز",testPreviewPush));
   if(!demo&&(!("PushManager" in window)||!("Notification" in window)))panel.append(element("p","قد تحتاج إلى إضافة الموقع إلى الشاشة الرئيسية على آيفون. يمكنك متابعة الردود هنا دون إشعارات.","support-hint"));
   const details=element("details",null,"support-recovery");details.append(element("summary","رمز الاسترجاع — احتفظ به سراً"));
   const code=element("textarea");code.className="support-input";code.readOnly=true;code.rows=3;code.dir="ltr";code.value=t.id+"."+k.secret;
@@ -115,14 +116,35 @@ function drawThread(t){
   panel.append(details);
 }
 async function preparePush(){
-  if(demo||!enabled||!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))return;
+  if(!enabled||!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window))return;
   try{
     await navigator.serviceWorker.register("/support-sw.js",{scope:"/"});
     worker=await navigator.serviceWorker.ready;
-    publicKey=(await api({action:"publicKey"})).publicKey;
+    publicKey=(demo?await previewPushRequest():await api({action:"publicKey"})).publicKey;
   }catch{}
 }
 function bytes(b64){const s=atob(b64.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(b64.length/4)*4,"="));return Uint8Array.from(s,c=>c.charCodeAt(0));}
+async function previewPushRequest(subscription){
+  const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),8000);
+  try{
+    const res=await fetch("/api/support-preview",subscription?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({subscription}),signal:ctrl.signal,cache:"no-store"}:{signal:ctrl.signal,cache:"no-store"});
+    const j=await res.json();if(!res.ok)throw Error(j.error||"تعذر اختبار الإشعار");return j;
+  }finally{clearTimeout(timer);}
+}
+async function testPreviewPush(){
+  if(!demo||busy)return;busy=true;
+  try{
+    if(!("Notification" in window)||!worker||!publicKey)throw Error("الإشعارات غير جاهزة؛ جرّب مجدداً أو استخدم متصفحاً مدعوماً.");
+    if(await Notification.requestPermission()!=="granted")throw Error("لم تسمح بالإشعارات.");
+    let sub=await worker.pushManager.getSubscription();
+    if(sub){
+      const old=new Uint8Array(sub.options.applicationServerKey||[]),expected=bytes(publicKey);
+      if(old.length!==expected.length||old.some((x,i)=>x!==expected[i])){await sub.unsubscribe();sub=null;}
+    }
+    if(!sub)sub=await worker.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:bytes(publicKey)});
+    await previewPushRequest(sub.toJSON());notice("قَبِل مزوّد الإشعارات الاختبار. تحقق من إشعار الهاتف؛ الوصول غير مضمون.");
+  }catch(e){notice(e.message);}finally{busy=false;}
+}
 async function togglePush(t,k,b){
   if(busy)return;busy=true;b.disabled=true;
   try{
