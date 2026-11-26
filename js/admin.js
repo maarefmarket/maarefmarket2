@@ -51,7 +51,7 @@ const authHeaders = () => ({ Authorization: "Bearer " + (session?.token || "") }
 
 /** يعالج 401 من أي طلب: يُخرج المستخدم */
 function handleUnauthorized() {
-  window.ckSupportAdmin?.clear();
+  window.ckSupportAdmin?.clear();window.ckFeedbackAlerts?.clear();
   storeSession(null);
   feedbackRequest++;$("feedbackList").textContent="";$("feedbackCount").textContent="";feedbackCursor=null;
   $("appScreen").style.display = "none"; $("loginScreen").style.display = "grid";
@@ -104,9 +104,9 @@ async function autoLogin() {
   return false;
 }
 function doLogout() {
-  window.ckSupportAdmin?.clear();
   if(DEMO){location.assign("/");return;}
   if (isDirty() && !confirm("لديك تعديلات غير محفوظة. الخروج وفقدها؟")) return;
+  window.ckSupportAdmin?.clear();window.ckFeedbackAlerts?.clear();
   storeSession(null); DATA = null; SAVED_DATA = null;
   feedbackRequest++;$("feedbackList").textContent="";$("feedbackCount").textContent="";feedbackCursor=null;
   $("appScreen").style.display = "none"; $("loginScreen").style.display = "grid"; $("loginErr").textContent = "";
@@ -115,6 +115,7 @@ function doLogout() {
 async function enterApp() {
   $("loginScreen").style.display = "none"; $("appScreen").style.display = "grid";
   updateSessionLabel();
+  window.ckFeedbackAlerts?.poll();
   await loadData();
 }
 
@@ -911,3 +912,5 @@ $("themeToggleBtn").addEventListener("click", () => applyAdminTheme(document.doc
 })();
 
 window.ckSupportAdminAuth=()=>authHeaders();
+
+window.ckOpenFeedback=()=>switchTab("feedback");
