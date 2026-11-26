@@ -450,3 +450,15 @@ html.maintenance-mode #shopDock{display:none!important}
 .general-feedback-btn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 @media(min-width:768px){.feedback-float-row{padding:8px 20px 12px}}
 @media(max-width:767px){.feedback-float-row{padding-block:4px 6px}.general-feedback-btn{font-size:12px;padding-inline:12px}}
+
+/* Banner A/B previews. Only activated via the preview-only URL parameter. */
+#bannerBox[data-banner-trial]{min-height:0;background:var(--surface)}
+#bannerBox[data-banner-trial] .banner-slide{min-height:0}
+#bannerBox[data-banner-trial] .banner-trial-frame{background:var(--elevated);display:grid;place-items:center;overflow:hidden}
+#bannerBox[data-banner-trial] img{position:static;inset:auto;display:block;width:100%;object-fit:contain;object-position:center}
+#bannerBox[data-banner-trial="contain"] .banner-trial-frame{height:clamp(160px,23vw,280px)}
+#bannerBox[data-banner-trial="contain"] img{height:100%;min-height:0;max-height:100%}
+#bannerBox[data-banner-trial="adaptive"] img{height:auto;max-height:clamp(280px,50vw,440px)}
+#bannerBox[data-banner-trial] .txt{min-height:0;padding:10px 14px;background:var(--surface);color:var(--fg);gap:3px}
+#bannerBox[data-banner-trial] .ey{color:var(--accent-deep);font-size:11px;letter-spacing:normal}
+#bannerBox[data-banner-trial] h2{color:var(--fg);font-size:clamp(15px,2.5vw,20px);margin:0;line-height:1.5}
